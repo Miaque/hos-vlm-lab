@@ -1,0 +1,133 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>HOS · 视觉模型实验室</title>
+    <link rel="stylesheet" href="/static/styles.css" />
+    <script src="/static/app.js" defer></script>
+  </head>
+  <body>
+    <header>
+      <div>
+        <span class="brand">HOS / VLM LAB</span>
+        <h1>视觉模型实验室</h1>
+      </div>
+      <span class="tag">同图 · 同文 · 可追溯</span>
+    </header>
+    <main>
+      <p id="simulation" class="notice" hidden>
+        模拟测试模式：结果由测试程序生成，不代表真实模型识别。
+      </p>
+      <p id="error" class="error" role="alert" hidden></p>
+      <div class="workspace">
+        <section class="panel">
+          <div class="section-heading">
+            <h2>01 / 图片组</h2>
+            <span id="image-count">0 / 20</span>
+          </div>
+          <label class="upload" for="files"
+            ><strong>选择本地图片</strong
+            ><span>JPEG、PNG、静态 WebP · 每图 ≤ 10 MiB</span
+            ><input
+              id="files"
+              type="file"
+              accept="image/jpeg,image/png,image/webp"
+              multiple
+          /></label>
+          <p class="muted">
+            每张图片独立检测；统一处理为最长边 2048px 的 JPEG，不放大。
+          </p>
+          <div id="thumbnails" class="thumbnails"></div>
+          <img id="preview" class="preview" alt="当前检测图片" hidden />
+          <label class="muted"
+            ><input
+              id="show-original"
+              type="checkbox"
+            />预览原图（实际发送仍为统一处理后的图片）</label
+          >
+          <p id="image-meta" class="muted"></p>
+        </section>
+        <section class="panel">
+          <h2>02 / 模型与输入</h2>
+          <fieldset>
+            <legend>参与对比的模型</legend>
+            <div id="models" class="models"></div>
+          </fieldset>
+          <div class="controls">
+            <label class="check"
+              ><input id="thinking" type="checkbox" />开启思考</label
+            ><label
+              >THINKING_BUDGET<input
+                id="budget"
+                type="number"
+                min="1"
+                step="1"
+                value="1024"
+                disabled /></label
+            ><label
+              >MAX_TOKENS<input
+                id="max-tokens"
+                type="number"
+                min="1"
+                step="1"
+                value="4096" /></label
+            ><label
+              >TEMPERATURE<input
+                id="temperature"
+                type="number"
+                step="any"
+                value="0.6"
+            /></label>
+          </div>
+          <p class="muted">
+            总生成上限包含思考与回答。不兼容的设置会拒绝整轮，不会静默忽略。
+          </p>
+          <div class="section-heading">
+            <label for="prompt">完整 JSON 提示词</label
+            ><button id="reset" class="subtle" type="button">恢复默认</button>
+          </div>
+          <textarea id="prompt" spellcheck="false" rows="12"></textarea>
+          <div class="actions">
+            <button id="run" class="primary">开始对比</button
+            ><button id="stop" disabled>停止待开始项</button
+            ><span id="run-status" role="status">准备就绪</span>
+          </div>
+          <p class="muted">
+            运行时仍可编辑下一轮，已创建的输入快照不会改变。停止不会撤销已发出的请求。
+          </p>
+        </section>
+      </div>
+      <section class="panel results">
+        <div class="section-heading">
+          <h2>03 / 检测结果</h2>
+          <span id="progress"></span>
+        </div>
+        <p id="result-empty" class="muted">
+          上传图片并选择模型后，识别结果将逐项显示在这里。
+        </p>
+        <div id="results" class="result-grid"></div>
+      </section>
+      <section class="panel history">
+        <div class="section-heading">
+          <h2>运行历史</h2>
+          <button id="refresh-history" class="subtle">刷新</button>
+        </div>
+        <div id="history"></div>
+        <div class="actions">
+          <label
+            >轮次 A
+            <select id="compare-a" aria-label="轮次 A"></select></label
+          ><label
+            >轮次 B
+            <select id="compare-b" aria-label="轮次 B"></select></label
+          ><button id="compare">对照两轮</button
+          ><button id="newer" class="subtle">较新记录</button
+          ><button id="older" class="subtle">更早记录</button>
+        </div>
+        <div id="comparison"></div>
+      </section>
+    </main>
+    <footer>本机实验工作台 · “未检出”不等于确认不存在 · 无自动重试</footer>
+  </body>
+</html>

@@ -1,0 +1,30 @@
+[project]
+name = "hos-vlm-lab"
+version = "0.1.0"
+description = "本机多模态图片对比与提示词调优工作台"
+readme = "README.md"
+authors = [
+    { name = "miaque", email = "miaque@163.com" }
+]
+requires-python = ">=3.12"
+dependencies = [
+    "fastapi>=0.141.1",
+    "httpx>=0.28.1",
+    "pillow>=12.3.0",
+    "pydantic>=2.13.5",
+    "python-multipart>=0.0.32",
+    "uvicorn>=0.52.4",
+]
+
+[project.scripts]
+hos-vlm-lab = "hos_vlm_lab:main"
+
+[build-system]
+requires = ["uv_build>=0.12.13,<0.13.0"]
+build-backend = "uv_build"
+
+[dependency-groups]
+dev = [
+    "pytest>=9.1.1",
+    "pytest-asyncio>=1.4.0",
+]
