@@ -11,7 +11,7 @@ uv sync --group dev
 uv run hos-vlm-lab
 ```
 
-打开 http://127.0.0.1:8000 。入口绑定本机、单进程。环境变量在启动时读取，修改后重启；程序不会自动加载 `.env`。没有配置模型也可以查看页面，无法提交真实检测。
+打开 http://127.0.0.1:8000 。入口绑定本机、单进程。启动时自动加载当前工作目录的 `.env`，已有环境变量优先，文件不存在时跳过；修改后重启。没有配置模型也可以查看页面，无法提交真实检测。
 
 无需密钥体验完整交互（仅模拟，不发生模型费用）：
 
@@ -23,19 +23,28 @@ uv run python -m tests.browser_app --data-dir .test-data/browser
 
 ## 模型配置与当前接入边界
 
-使用 [.env.example](.env.example) 中的环境变量名称。原四个模型共用 `VLM_BASE_URL` 和 `VLM_API_KEY`。BASE_URL 包含服务要求的路径前缀（例如 `https://your-host/v1`），不含 `/chat/completions`，程序自动追加该路径。各模型仍通过 `DEEPSEEK`、`QWEN36`、`QWEN38`、`KIMI` 前缀分别配置 `_MODEL_ID`、`_PROFILE` 和可选 `_PRICING_JSON`。旧的各模型 `_API_URL` / `_API_KEY` 不再读取。共享端点的能力需按实际服务核实。
+模型输出支持纯 JSON，以及外层单反引号或三反引号代码块（可带 json 标签）；去除外层标记后仍严格校验事件协议，原始响应保持不变。
 
-| 配置 | 当前可运行范围 |
+模型请求关闭 TLS 证书校验，适用于当前本机网关调试；HTTPS 仍加密，但不验证服务端证书身份。
+
+使用 [.env.example](.env.example) 配置连接。调用层使用 LangChain `ChatOpenAI`，支持 new-api 的 OpenAI 兼容 Chat Completions 入口，不限制官方域名。无需填写 `*_PROFILE`，旧变量不再读取。
+
+| 模型 | 连接变量 |
 | --- | --- |
-| DeepSeek 官方，profile=`deepseek`，model=`deepseek-flash` | 完整端点为 `https://api.deepseek.com/chat/completions` 或其 `/v1/chat/completions` 路径；仅非思考，temperature 0–2，总输出 1–393216 |
-| Qwen3.6 / Qwen3.8 Flash | 环境配置及页面槽位已实现；实际地域与模型输出/预算上限未确证，保持不可运行 |
-| Moonshot 官方 Kimi K2.6 | 环境配置及页面槽位已实现；模型专属输出上限未确证，保持不可运行 |
-| Qwen3.6 27B | 独立连接槽位已实现；实际端点及视觉/参数能力待确证，保持不可运行 |
-| 第三方网关 | 尚无已取证 profile，不套用官方能力 |
+| DeepSeek、Qwen3.6 Flash、Qwen3.8 Flash、Kimi | `VLM_BASE_URL` / `VLM_API_KEY` |
+| Qwen3.6 27B | `QWEN36_27B_BASE_URL` / `QWEN36_27B_API_KEY`，不回退到共享连接 |
 
-这些是客户端预检能力，**没有执行真实 API 验收**。五款真实模型同图对比仍需补齐服务商/地域/端点证据与合法配置。详见 [能力调查](specs/001-model-image-compare/model-compatibility.md)。
+BASE_URL 包含服务路径前缀（例如 `https://your-host/v1`），不含 `/chat/completions`。每款模型独立填写 `_MODEL_ID`，使用网关中实际可用的名称；价格 `_PRICING_JSON` 可选。修改后重启。在仓库根目录配置 `.env` 后直接启动：
 
-思考关闭时 THINKING_BUDGET 为空且不发送；开启时要求正整数预算，并小于 MAX_TOKENS。MAX_TOKENS 指思考与回答的总生成上限。所有选择的模型须支持用户设置；一个不兼容即拒绝整轮，不修改温度、不丢弃预算。DeepSeek 官方思考模式不能满足本实验的数值预算及温度比较条件，因此拒绝。
+```powershell
+uv run hos-vlm-lab
+```
+
+参数按模型槽位适配，模型 ID 可使用网关别名。Qwen 三个槽位发送 `enable_thinking`；开启时同时发送 `thinking_budget` 和 `max_completion_tokens`，关闭时发送 `max_tokens` 且不发送预算。DeepSeek/Kimi 非思考发送 `thinking.type=disabled` 和 `max_tokens`，暂不支持数值思考预算，开启时整轮预检拒绝。温度原样传递，本地校验 0–2；输出及预算必须为正整数，预算小于输出上限。
+
+连接齐全即可进行非思考请求，不再因缺少服务商范围证明阻止调用。实际视觉能力、参数范围与生效语义由配置的网关和上游决定；特别是独立部署的 27B 需支持上述 Qwen 参数形式，否则保存其调用错误并按实际服务适配。服务商限制导致的 HTTP 错误保存在单项结果，不静默修改设置。
+
+LangChain 自动重试和本次调用的 LangSmith tracing 均关闭。原始响应在 SDK 解析前捕获并脱敏，保留供应商扩展字段、实际 usage 和错误；费用计算与历史存储不变。**本地模拟测试不代表五款真实模型已接通，也不证明各服务的预算语义完全可比。** 历史官方调查与当前接入说明见 [能力调查](specs/001-model-image-compare/model-compatibility.md)。
 
 ## 使用流程
 
@@ -82,4 +91,4 @@ uv build
 
 ### Qwen3.6 27B 独立连接
 
-使用 `QWEN36_27B_BASE_URL`（含服务要求的路径前缀，例如 `https://your-host/v1`，不含 `/chat/completions`）和 `QWEN36_27B_API_KEY`；程序去掉末尾斜杠并追加 `/chat/completions`。模型标识使用 `QWEN36_27B_MODEL_ID=qwen3.6-27b`，能力配置使用 `QWEN36_27B_PROFILE`，价格可选 `QWEN36_27B_PRICING_JSON`。不读取共享 VLM 连接作为回退，缺失配置明确拒绝。PROFILE 必须等待实际服务的能力取证，不能任意填写后运行。
+使用 `QWEN36_27B_BASE_URL`（含服务要求的路径前缀，例如 `https://your-host/v1`，不含 `/chat/completions`）和 `QWEN36_27B_API_KEY`；程序去掉末尾斜杠并追加 `/chat/completions`。模型标识使用 `QWEN36_27B_MODEL_ID=qwen3.6-27b`，价格可选 `QWEN36_27B_PRICING_JSON`。不读取共享 VLM 连接作为回退，缺失配置明确拒绝。无需填写 PROFILE。

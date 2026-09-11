@@ -1,4 +1,4 @@
-"""环境连接配置；能力未确证时拒绝运行，不静默丢弃控制项。"""
+"""环境连接配置与模型槽位参数映射；不静默丢弃控制项。"""
 
 import os
 from dataclasses import dataclass, field
@@ -14,7 +14,7 @@ class ModelConfig:
     api_url: str
     api_key: str = field(repr=False)
     model_id: str
-    profile: str
+    profile: str = ""
     pricing: dict | None = None
 
     def identity(self):
@@ -49,7 +49,7 @@ def load_config() -> Config:
             base_url.rstrip("/") + "/chat/completions" if base_url else "",
             os.environ.get(f"{connection_prefix}_API_KEY", ""),
             os.environ.get(f"{prefix}_MODEL_ID", ""),
-            os.environ.get(f"{prefix}_PROFILE", ""),
+            "",  # 保留历史身份字段，不再读取 PROFILE 环境变量。
         ]
         price_text = os.environ.get(f"{prefix}_PRICING_JSON", "")
         try:
@@ -63,27 +63,18 @@ def load_config() -> Config:
 
 
 def build_parameters(model: ModelConfig, controls: Controls) -> dict:
-    if not all((model.api_url, model.api_key, model.model_id, model.profile)):
+    if not all((model.api_url, model.api_key, model.model_id)):
         raise LabError(f"{model.label}：连接配置不完整")
-    if (
-        model.profile == "deepseek"
-        and model.model_id == "deepseek-flash"
-        and model.api_url
-        in {
-            "https://api.deepseek.com/chat/completions",
-            "https://api.deepseek.com/v1/chat/completions",
-        }
-    ):
+    if not 0 <= controls.temperature <= 2:
+        raise LabError(f"{model.label}：temperature 必须在 0–2 之间")
+    parameters = {"temperature": controls.temperature, "max_tokens": controls.max_tokens}
+    if model.key in {"qwen36", "qwen38", "qwen36_27b"}:
+        parameters["enable_thinking"] = controls.thinking
         if controls.thinking:
-            raise LabError(f"{model.label}：思考模式不支持可比的数值预算及温度")
-        if not 0 <= controls.temperature <= 2:
-            raise LabError(f"{model.label}：temperature 必须在 0–2 之间")
-        # 官方文档总输出上限 384K，证据链接保存在 model-compatibility.md。
-        if controls.max_tokens > 384 * 1024:
-            raise LabError(f"{model.label}：MAX_TOKENS 超过总输出上限 384K")
-        return {
-            "thinking": {"type": "disabled"},
-            "temperature": controls.temperature,
-            "max_tokens": controls.max_tokens,
-        }
-    raise LabError(f"{model.label}：该端点与模型的参数范围尚未完成确证，暂不可运行")
+            parameters["thinking_budget"] = controls.thinking_budget
+            parameters["max_completion_tokens"] = parameters.pop("max_tokens")
+    else:
+        if controls.thinking:
+            raise LabError(f"{model.label}：当前适配不支持数值思考预算，请关闭思考")
+        parameters["thinking"] = {"type": "disabled"}
+    return parameters

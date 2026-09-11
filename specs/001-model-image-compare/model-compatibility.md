@@ -1,3 +1,13 @@
+# 当前接入方式（2026-09-12）
+
+用户确认改用 LangChain ChatOpenAI 对接 new-api，并保留 27B 的独立连接。本节替代下方历史调查中的 PROFILE/官方域名放行限制；历史文档不作为网关能力证明。
+
+不再读取 *_PROFILE。按槽位映射：Qwen 非思考发送 enable_thinking=false/max_tokens；开启发送 enable_thinking=true/thinking_budget/max_completion_tokens。DeepSeek/Kimi 发送 thinking.type=disabled/max_tokens，数值思考预算暂拒绝。温度原样传递；未知服务端范围不在本地虚构上限，实际不兼容由调用错误保留。27B 目前采用同一 Qwen 请求形式，独立部署是否支持须真实验证。
+
+调用配置依据：[LangChain ChatOpenAI](https://docs.langchain.com/oss/python/integrations/chat/openai)、[extra_body](https://reference.langchain.com/python/langchain-openai/chat_models/base/BaseChatOpenAI/extra_body)、[Qwen 思考参数](https://help.aliyun.com/en/model-studio/deep-thinking)。不自动重试；捕获 SDK 解析前原始响应，保留扩展 usage。T030/T033 真实服务验收仍未完成。
+
+---
+
 # 四模型参数兼容性核实
 
 核实日期：2026-09-11。范围：官方公开文档；未读取密钥、未调用付费推理 API。下表按 **DeepSeek 官方、Qwen 百炼、Kimi 官方直连** 建立设计基线；实际环境变量若指向第三方网关，必须另行核实，不能沿用品牌推断。

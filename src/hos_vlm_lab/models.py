@@ -2,6 +2,7 @@
 
 import json
 import math
+import re
 from typing import Annotated
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
@@ -122,6 +123,9 @@ class Event(BaseModel):
 
 
 def parse_events(text: str, allowed: dict[str, str]) -> list[dict]:
+    wrapped = re.fullmatch(r"\s*(```|`)(?:json)?[ \t]*\r?\n(.*?)\r?\n\1\s*", text, re.DOTALL | re.IGNORECASE)
+    if wrapped:
+        text = wrapped.group(2)
     data = _json(text)
     if (
         not isinstance(data, dict)

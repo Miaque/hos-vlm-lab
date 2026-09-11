@@ -43,6 +43,32 @@ def test_valid_empty_and_event():
         parse_events(json.dumps({"events": [event, event]}), {"person": "人员"})
 
 
+@pytest.mark.parametrize("fence", ["`", "```"])
+@pytest.mark.parametrize("label", ["", "json", "JSON"])
+def test_wrapped_events(fence, label):
+    event = {"canonical_event_code": "person", "confidence": 0.9, "evidence": "可见人员"}
+    body = json.dumps({"events": [event]}, ensure_ascii=False)
+    raw = f"  {fence}{label}\r\n{body}\r\n{fence}\n"
+    assert parse_events(raw, {"person": "人员"}) == [event]
+    assert parse_events(f"{fence}{label}\n{{\"events\":[]}}\n{fence}", {}) == []
+    with pytest.raises(ValueError):
+        parse_events(raw, {})
+    with pytest.raises(ValueError):
+        parse_prompt(raw)
+
+
+@pytest.mark.parametrize("raw", [
+    '说明\n```json\n{"events":[]}\n```',
+    '```json\n{"events":[]}\n```\n说明',
+    '```json\n{"events":[]}\n`',
+    '```json\n{"events":[],"events":[]}\n```',
+    '```json\n{"events":[],"extra":1}\n```',
+])
+def test_wrappers_do_not_relax_json_validation(raw):
+    with pytest.raises(ValueError):
+        parse_events(raw, {})
+
+
 @pytest.mark.parametrize(
     "changes",
     [

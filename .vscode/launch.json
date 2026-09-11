@@ -1,0 +1,23 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "启动 hos-vlm-lab",
+      "type": "debugpy",
+      "request": "launch",
+      "python": "${workspaceFolder}/.venv/Scripts/python.exe",
+      "module": "uvicorn",
+      "args": [
+        "hos_vlm_lab.app:create_app",
+        "--factory",
+        "--host", "127.0.0.1",
+        "--port", "8000",
+        "--workers", "1",
+        "--env-file", "${workspaceFolder}/.env"
+      ],
+      "cwd": "${workspaceFolder}",
+      "console": "integratedTerminal",
+      "justMyCode": true
+    }
+  ]
+}

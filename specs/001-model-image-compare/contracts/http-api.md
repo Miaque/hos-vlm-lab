@@ -4,7 +4,7 @@
 
 ## 公共类型
 
-- controls = {thinking: boolean, thinking_budget: positive integer|null, max_tokens: positive integer, temperature: finite number}。关闭思考预算必须null；其他约束按profile。
+- controls = {thinking: boolean, thinking_budget: positive integer|null, max_tokens: positive integer, temperature: finite number}。关闭思考预算必须null；其他约束按模型槽位适配；temperature 为 0–2。
 - error = {code: string, message: string, details: [{model_key?: string, field?: string, message: string}]}。
 - request_id为客户端每次操作生成的UUID；同请求重传必须复用ID，修改内容必须换ID。
 - status值见[data-model.md](../data-model.md)。所有用量、费用的null显示未知；无模型结果显示未运行，不显示未检出。
@@ -33,7 +33,7 @@ attempt摘要包含id、image_id、model_key、attempt_no、retry_of、status、
 
 上传任何文件不合法时本次上传整体失败，不创建部分有效图片组；已写临时文件清理。单图10MiB、2000万像素，静态JPEG/PNG/WebP。数据路径不接受用户任意目录。
 
-422输入或参数无效；413上传限制；404记录缺失；409有活动批次、重试身份变化、request_id内容冲突或目标不可重试。可重试状态仅failed/invalid_response/interrupted。未知能力为422并解释，不能自动试调用。
+422输入或参数无效；413上传限制；404记录缺失；409有活动批次、重试身份变化、request_id内容冲突或目标不可重试。可重试状态仅failed/invalid_response/interrupted。本地不支持的参数组合为422；服务商能力与范围错误在实际调用后记入attempt。
 
 已接纳后模型HTTP错误、超时和格式错误写入attempt，不改变创建轮次202语义。没有自动格式纠正或请求重试。
 
@@ -43,7 +43,9 @@ attempt摘要包含id、image_id、model_key、attempt_no、retry_of、status、
 
 历史视图选两轮按image_id对照；重传同内容不同ID可以根据原图及处理后哈希对应，预处理不同则明确标注。对应模型缺失显示未运行。恢复默认不覆盖历史；正在运行时编辑仅用于下一轮。
 
-原四模型共用 VLM_BASE_URL / VLM_API_KEY；BASE_URL 包含服务路径前缀，程序追加 /chat/completions。DEEPSEEK/QWEN36/QWEN38/KIMI 前缀保留 _MODEL_ID、_PROFILE 和可选 _PRICING_JSON，各模型旧 _API_URL / _API_KEY 不再读取；PROFILE由实现维护已取证映射。价格未配置显示未知，不要求用户填虚构费用。
+原四模型共用 VLM_BASE_URL / VLM_API_KEY；BASE_URL 包含服务路径前缀，程序追加 /chat/completions。DEEPSEEK/QWEN36/QWEN38/KIMI 前缀保留 _MODEL_ID 和可选 _PRICING_JSON，各模型旧 _API_URL / _API_KEY 不再读取；不读取 PROFILE。价格未配置显示未知，不要求用户填虚构费用。
 
 
-新增模型 key 为 `qwen36_27b`，使用独立 `QWEN36_27B_BASE_URL` / `_API_KEY` / `_MODEL_ID` / `_PROFILE`，可选 `_PRICING_JSON`；BASE_URL 包含服务路径前缀，追加 `/chat/completions` 得到快照中的 api_url。没有共享 VLM 配置回退。
+新增模型 key 为 `qwen36_27b`，使用独立 `QWEN36_27B_BASE_URL` / `_API_KEY` / `_MODEL_ID`，可选 `_PRICING_JSON`；BASE_URL 包含服务路径前缀，追加 `/chat/completions` 得到快照中的 api_url。没有共享 VLM 配置回退。
+
+当前 capabilities 返回 adapter=langchain-openai、strict_validation=false；controls 仅描述本地参数映射，不代表服务商已验证能力。max_tokens 不返回未经验证的服务商上限。

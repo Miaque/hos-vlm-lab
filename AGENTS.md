@@ -30,8 +30,8 @@
 
 ## 当前实现与入口
 
-- Python 3.12+ / uv，FastAPI + HTTPX，原生 HTML/JS/CSS，SQLite + 图片文件；依赖与版本以 pyproject.toml / uv.lock 为准。
-- `uv run hos-vlm-lab` 启动单进程本机服务 `127.0.0.1:8000`。仅从启动环境读取连接，不自动加载 `.env`。
+- Python 3.12+ / uv，FastAPI + LangChain ChatOpenAI + HTTPX，原生 HTML/JS/CSS，SQLite + 图片文件；依赖与版本以 pyproject.toml / uv.lock 为准。
+- `uv run hos-vlm-lab` 启动单进程本机服务 `127.0.0.1:8000`。启动入口自动加载当前工作目录的 `.env`，已有环境变量优先，文件不存在时跳过。
 - `uv run pytest -q` 使用 fake / MockTransport 和临时数据；`uv build` 构建包。
 - `uv run python -m tests.browser_app --data-dir .test-data/browser` 启动仅测试用模拟页面 `127.0.0.1:8001`，拒绝出站网络，不代表真实检测。
 - `src/hos_vlm_lab/` 中 app 管理接口与生命周期，config / models 做预检，images 处理图片，gateway 调用，store 在单线程持有 SQLite，runner 管理单活跃批次，static 提供界面。
@@ -41,9 +41,9 @@
 
 ## 已确认边界
 
-同轮 1–20 张独立图片 × 1–5 个模型，统一图片字节与原样 JSON 提示词；可调整 thinking、thinking_budget、max_tokens、temperature。完整预检通过后才创建轮次；未知能力或不兼容设置拒绝整轮，不静默省略或改写。
+同轮 1–20 张独立图片 × 1–5 个模型，统一图片字节与原样 JSON 提示词；可调整 thinking、thinking_budget、max_tokens、temperature。完整预检通过后才创建轮次；连接缺失或本地不兼容设置拒绝整轮，不静默省略或改写。
 
-当前仅 DeepSeek 官方已确证的非思考参数 profile 可以放行；其余槽位未确证范围保持不可运行。新增接入前读取 `model-compatibility.md`，核实实际提供方、地域、端点、模型 ID 和范围。模拟验收不能关闭真实调用任务，也不能宣称五款真实模型已接通。
+调用层使用 LangChain ChatOpenAI 对接 new-api / OpenAI 兼容入口，不再读取 *_PROFILE 或限制官方域名。原四模型共享连接，27B 独立且不回退。按模型槽位映射特殊参数：Qwen 使用 enable_thinking，开启时带 thinking_budget/max_completion_tokens；DeepSeek/Kimi 仅支持非思考数值参数。服务端能力和范围错误记录为调用失败，不静默改写参数。真实视觉和参数生效情况仍需验收，不能宣称五款真实模型已接通。
 
 输出仅为 events 中的 canonical_event_code / confidence / evidence，不画框、不添加 uncertain 状态或自动准确率排行。有效空列表是“未检出”，解析或调用失败单独保留。默认提示词来自 hos-analysis 历史测试种子，带来源信息；不依赖生产目录，不将其中的区域/佩戴义务假设默认为用户现场事实。
 
@@ -63,4 +63,4 @@
 - 不把 API 密钥、敏感样本或含凭据的响应提交到仓库；接入真实模型时使用环境配置，并避免默认测试触发付费调用。
 - 随项目实际实现更新本文件中的结构和命令，避免将规划写成已完成功能。
 
-连接配置：原四个模型共用 `VLM_BASE_URL` / `VLM_API_KEY`；`qwen3.6-27b` 独立使用 `QWEN36_27B_BASE_URL` / `QWEN36_27B_API_KEY`。各模型 ID、profile 和价格独立配置；BASE_URL 包含服务路径前缀，程序追加 `/chat/completions`。
+连接配置：原四个模型共用 `VLM_BASE_URL` / `VLM_API_KEY`；`qwen3.6-27b` 独立使用 `QWEN36_27B_BASE_URL` / `QWEN36_27B_API_KEY`。各模型 ID 和价格独立配置；BASE_URL 包含服务路径前缀，程序追加 `/chat/completions`。

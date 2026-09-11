@@ -18,11 +18,12 @@ def test_27b_independent_connection(monkeypatch, base):
     assert model.api_url == "https://independent.test/v1/chat/completions"
     assert model.api_key == "27b-secret"
     assert "27b-secret" not in str(model.identity())
-    with pytest.raises(LabError, match="尚未完成确证"):
-        build_parameters(model, Controls(thinking=False, max_tokens=1000, temperature=0.6))
+    assert build_parameters(model, Controls(thinking=False, max_tokens=1000, temperature=0.6))["enable_thinking"] is False
     monkeypatch.delenv("QWEN36_27B_API_KEY")
     model = next(m for m in load_config().models if m.key == "qwen36_27b")
     assert model.api_key == ""
+    with pytest.raises(LabError, match="连接配置不完整"):
+        build_parameters(model, Controls(thinking=False, max_tokens=1000, temperature=0.6))
 
 
 @pytest.mark.parametrize("base", ["https://shared.test/v1", "https://shared.test/v1/"])
@@ -37,7 +38,7 @@ def test_four_models_share_connection(monkeypatch, base):
         monkeypatch.setenv(f"{prefix}_PROFILE", "test-profile")
     models = load_config().models[:4]
     assert [m.model_id for m in models] == [p.lower() for p in prefixes]
-    assert all(m.profile == "test-profile" for m in models)
+    assert all(m.profile == "" for m in models)
     assert all(m.api_url == "https://shared.test/v1/chat/completions" for m in models)
     assert all(m.api_key == "shared-secret" for m in models)
     assert "shared-secret" not in str([m.identity() for m in models])

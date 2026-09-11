@@ -81,3 +81,10 @@ T034：先运行新测试，复现缺少第五个槽位及五模型请求被拒�
 ## 原四模型共享连接验证
 
 T035：新增测试先得到 2 failed、2 passed，修改后全套 `uv run pytest -q` 为 66 passed、2 个原有依赖弃用警告；`uv build` 成功。验证共享 BASE_URL 尾斜杠拼接、四模型共用密钥且保留各自 ID/profile、旧逐模型连接不再读取、共享配置缺失不回退，以及 27B 密钥独立。未执行真实调用；T030/T033 仍待实际端点取证。
+
+
+## 2026-09-12 LangChain / new-api 调用改造
+
+`uv run pytest -q`：72 passed，1 个 Starlette/AnyIO 依赖弃用警告；`uv build` 成功；`git diff --check` 无空白错误。MockTransport 覆盖 LangChain 实际请求、两套连接并发隔离、相同图片/原样提示词、思考开关及预算透传、原始扩展 usage 保留、HTTP 错误、超时、格式错误、脱敏与无自动重试。旧 PROFILE 环境变量不再影响可运行性，27B 缺失密钥不回退。
+
+未执行真实模型 API 或浏览器验收，T030/T033 保持未完成。27B 采用 Qwen 参数形式，需由实际独立服务验证。没有 Git 提交或推送。既有带非空 profile 的历史快照保持原样；其重试可能因身份变化被既有校验拒绝，可用相同输入创建新轮。

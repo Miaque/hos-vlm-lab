@@ -31,6 +31,7 @@ def create_app(config=None, gateway=None, parameter_builder=build_parameters):
         await store.open()
         async with httpx.AsyncClient(
             timeout=httpx.Timeout(180, connect=10),
+            verify=False,
             follow_redirects=False,
             trust_env=False,
         ) as client:
@@ -127,25 +128,26 @@ def create_app(config=None, gateway=None, parameter_builder=build_parameters):
                     "key": model.key,
                     "label": model.label,
                     "configured": bool(
-                        model.api_key
-                        and model.api_url
-                        and model.model_id
-                        and model.profile
+                        model.api_key and model.api_url and model.model_id
                     ),
                     "runnable": reason is None,
                     "reason": reason,
                     "capabilities": {
-                        "profile": model.profile,
-                        "strict_validation": True,
+                        "adapter": "langchain-openai",
+                        "strict_validation": False,
                         "controls": {
-                            "thinking": [False],
-                            "thinking_budget": None,
-                            "max_tokens": {"min": 1, "max": 393216},
+                            "thinking": [False, True]
+                            if model.key in {"qwen36", "qwen38", "qwen36_27b"}
+                            else [False],
+                            "thinking_budget": {"min": 1}
+                            if model.key in {"qwen36", "qwen38", "qwen36_27b"}
+                            else None,
+                            "max_tokens": {"min": 1},
                             "temperature": {"min": 0, "max": 2},
                         }
                         if reason is None and not config.simulation
                         else None,
-                        "source": "https://api-docs.deepseek.com/api/create-chat-completion/"
+                        "source": "https://docs.langchain.com/oss/python/integrations/chat/openai"
                         if reason is None and not config.simulation
                         else None,
                     },

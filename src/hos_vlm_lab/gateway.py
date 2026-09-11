@@ -1,13 +1,17 @@
-"""一次 HTTP 调用，保留首次响应，不进行网络或格式重试。"""
+"""通过 LangChain 调用模型，保留首次响应，不进行网络或格式重试。"""
 
 import asyncio
 import base64
 import json
 import time
+from contextvars import ContextVar
 from datetime import datetime
 from decimal import Decimal, InvalidOperation
 
 import httpx
+from langchain_openai import ChatOpenAI
+from langsmith import tracing_context
+from openai import APIConnectionError, APITimeoutError
 
 from .models import _json, parse_events
 
@@ -74,10 +78,17 @@ class Gateway:
     def __init__(self, client: httpx.AsyncClient, secrets=()):
         self.client = client
         self.secrets = secrets
+        self._responses = ContextVar("gateway_responses", default=None)
+        self.client.event_hooks["response"].append(self._capture_response)
+
+    async def _capture_response(self, response):
+        responses = self._responses.get()
+        if responses is not None:
+            await response.aread()
+            responses.append(response)
 
     async def call(self, model, image, prompt, parameters, events):
         body = {
-            "model": model.model_id,
             "messages": [
                 {
                     "role": "user",
@@ -93,7 +104,6 @@ class Gateway:
                     ],
                 }
             ],
-            **parameters,
         }
         result = {
             "status": "failed",
@@ -106,13 +116,31 @@ class Gateway:
             "error": None,
         }
         started = time.monotonic()
+        responses = []
+        token = self._responses.set(responses)
         try:
-            async with asyncio.timeout(180):
-                response = await self.client.post(
-                    model.api_url,
-                    headers={"Authorization": f"Bearer {model.api_key}"},
-                    json=body,
-                )
+            llm = ChatOpenAI(
+                model=model.model_id,
+                base_url=model.api_url.removesuffix("/chat/completions"),
+                api_key=model.api_key,
+                http_async_client=self.client,
+                max_retries=0,
+                cache=False,
+                timeout=180,
+                temperature=None,
+                use_responses_api=False,
+                # 保留供应商字段名，避免 LangChain 重命名 max_tokens。
+                extra_body=parameters,
+            )
+            try:
+                with tracing_context(enabled=False):
+                    async with asyncio.timeout(180):
+                        await llm.ainvoke(body["messages"])
+            except Exception:
+                # SDK 可能先拒绝错误/非标准响应；仍按原始报文记录首次结果。
+                if not responses:
+                    raise
+            response = responses[0]
             keys = tuple(k for k in (*self.secrets, model.api_key) if k)
 
             def redact(value):
@@ -155,9 +183,9 @@ class Gateway:
                 raise ValueError("模型输出被截断")
             result["parsed_events"] = parse_events(result["model_text"], events)
             result["status"] = "succeeded"
-        except (TimeoutError, httpx.TimeoutException):
+        except (TimeoutError, httpx.TimeoutException, APITimeoutError):
             result["error"] = {"code": "timeout", "message": "模型调用超时"}
-        except httpx.HTTPError:
+        except (httpx.HTTPError, APIConnectionError):
             result["error"] = {"code": "network", "message": "模型网络请求失败"}
         except (ValueError, KeyError, IndexError, TypeError):
             result["error"] = {
@@ -165,5 +193,6 @@ class Gateway:
                 "message": "首次响应不符合事件协议，详见原文",
             }
         finally:
+            self._responses.reset(token)
             result["elapsed_ms"] = round((time.monotonic() - started) * 1000)
         return result
