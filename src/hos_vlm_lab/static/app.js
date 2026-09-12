@@ -1,5 +1,14 @@
 "use strict";
 const $ = (id) => document.getElementById(id);
+const chinaTime = new Intl.DateTimeFormat("zh-CN", {
+  timeZone: "Asia/Shanghai",
+  year: "numeric", month: "2-digit", day: "2-digit",
+  hour: "2-digit", minute: "2-digit", second: "2-digit", hourCycle: "h23",
+});
+function formatTime(value) {
+  const parts = Object.fromEntries(chinaTime.formatToParts(new Date(value)).map((p) => [p.type, p.value]));
+  return `${parts.year}年${parts.month}月${parts.day}日 ${parts.hour}:${parts.minute}:${parts.second}`;
+}
 const state = {
   config: null,
   images: [],
@@ -8,6 +17,9 @@ const state = {
   timer: null,
   historyOffset: 0,
   pending: null,
+  promptDraft: null,
+  excludedEvents: new Set(),
+  editingEvent: null,
 };
 const labels = {
   queued: "等待中",
@@ -88,6 +100,170 @@ function jsonPost(body) {
     body: JSON.stringify(body),
   };
 }
+function readPromptDraft() {
+  const data = JSON.parse($("prompt").value);
+  if (!data || !Array.isArray(data.events) || !data.events.length)
+    throw new Error("完整 JSON 必须包含非空 events 数组。");
+  const codes = new Set();
+  for (const event of data.events) {
+    if (!event || typeof event.code !== "string" || !event.code.trim() ||
+        typeof event.name !== "string" || !event.name.trim() || codes.has(event.code))
+      throw new Error("每项事件需要非空名称和唯一编码，请修正完整 JSON。");
+    codes.add(event.code);
+  }
+  return data;
+}
+const eventSelectionKey = "hos-vlm-lab.excluded-events.v1";
+function saveEventSelection() {
+  try {
+    localStorage.setItem(eventSelectionKey, JSON.stringify([...state.excludedEvents]));
+  } catch (exc) {
+    error(new Error("无法保存事件选择，刷新后可能丢失：" + exc.message));
+  }
+}
+function loadPrompt(text, restoreSelection = false) {
+  $("prompt").value = text;
+  state.excludedEvents.clear();
+  if (restoreSelection) {
+    try {
+      const saved = JSON.parse(localStorage.getItem(eventSelectionKey));
+      if (Array.isArray(saved) && saved.every((code) => typeof code === "string"))
+        state.excludedEvents = new Set(saved);
+    } catch {
+      // 本地存储不可用或内容损坏时，仍允许使用默认事件。
+    }
+  }
+  $("event-search").value = "";
+  $("events-selected").checked = false;
+  syncPromptEditor();
+  if (!restoreSelection) saveEventSelection();
+}
+function syncPromptEditor() {
+  try {
+    state.promptDraft = readPromptDraft();
+    const codes = new Set(state.promptDraft.events.map((e) => e.code));
+    state.excludedEvents = new Set([...state.excludedEvents].filter((c) => codes.has(c)));
+    $("event-error").hidden = true;
+  } catch (exc) {
+    state.promptDraft = null;
+    $("event-error").textContent = "无法展示事件，请修正完整 JSON：" + exc.message;
+    $("event-error").hidden = false;
+  }
+  renderEventEditor();
+}
+function updateEventCount() {
+  const events = state.promptDraft?.events || [];
+  const shown = [...$("event-editor").children].filter((row) => !row.hidden).length;
+  $("event-count").textContent = `已选 ${events.filter((e) => !state.excludedEvents.has(e.code)).length} / ${events.length} 项 · 显示 ${shown} 项`;
+}
+function renderEventEditor() {
+  const host = $("event-editor");
+  host.replaceChildren();
+  $("event-detail").replaceChildren();
+  const names = { match: "命中条件", exclude: "排除条件", uncertain: "证据不足时" };
+  for (const event of state.promptDraft?.events || []) {
+    const row = element("div", undefined, "event-rule");
+    row.dataset.search = `${event.name} ${event.code}`.toLowerCase();
+    row.dataset.code = event.code;
+    const check = element("input");
+    check.type = "checkbox";
+    check.checked = !state.excludedEvents.has(event.code);
+    check.setAttribute("aria-label", "参与检测：" + event.name);
+    check.onchange = () => {
+      if (check.checked) state.excludedEvents.delete(event.code);
+      else state.excludedEvents.add(event.code);
+      saveEventSelection();
+      filterEvents();
+    };
+    const detail = element("section");
+    detail.dataset.code = event.code;
+    detail.hidden = true;
+    detail.append(element("h3", event.name), element("p", event.code, "muted"));
+    const summary = element("button", undefined, "event-open");
+    summary.type = "button";
+    summary.setAttribute("aria-label", "编辑规则：" + event.name);
+    summary.onclick = () => openEvent(event.code);
+    summary.append(element("strong", event.name), element("small", event.code));
+    for (const [key, value] of Object.entries(event)) {
+      if (["name", "code"].includes(key)) continue;
+      const label = element("label", names[key] || key);
+      const input = element("textarea");
+      const isText = typeof value === "string";
+      input.value = isText ? value : JSON.stringify(value, null, 2);
+      input.rows = 3;
+      input.setAttribute("aria-label", `${event.name} · ${names[key] || key}`);
+      if (!isText) label.append(element("small", "（JSON 值）", "muted"));
+      input.oninput = () => {
+        try {
+          event[key] = isText ? input.value : JSON.parse(input.value);
+          input.setCustomValidity("");
+          input.removeAttribute("aria-invalid");
+          $("prompt").value = JSON.stringify(state.promptDraft, null, 2);
+        } catch {
+          input.setCustomValidity("请输入有效 JSON 值");
+          input.setAttribute("aria-invalid", "true");
+        }
+      };
+      label.append(input);
+      detail.append(label);
+    }
+    row.append(check, summary);
+    host.append(row);
+    $("event-detail").append(detail);
+  }
+  filterEvents();
+}
+function openEvent(code) {
+  state.editingEvent = code;
+  for (const section of $("event-detail").children) section.hidden = section.dataset.code !== code;
+  for (const row of $("event-editor").children) {
+    const active = row.dataset.code === code;
+    row.classList.toggle("editing", active);
+    row.querySelector("button").setAttribute("aria-pressed", String(active));
+  }
+}
+function filterEvents() {
+  const query = $("event-search").value.trim().toLowerCase();
+  for (const row of $("event-editor").children)
+    row.hidden = !row.dataset.search.includes(query) ||
+      ($("events-selected").checked && state.excludedEvents.has(row.dataset.code));
+  const visible = [...$("event-editor").children].filter((row) => !row.hidden);
+  $("events-empty").hidden = visible.length > 0;
+  openEvent(visible.some((row) => row.dataset.code === state.editingEvent)
+    ? state.editingEvent : visible[0]?.dataset.code);
+  updateEventCount();
+}
+function selectedPrompt() {
+  for (const input of $("event-detail").querySelectorAll("textarea")) {
+    if (!input.checkValidity()) {
+      $("event-search").value = "";
+      $("events-selected").checked = false;
+      filterEvents();
+      openEvent(input.closest("section").dataset.code);
+      input.reportValidity();
+      throw new Error("请修正事件规则中的 JSON 值后再运行。");
+    }
+  }
+  const data = readPromptDraft();
+  data.events = data.events.filter((e) => !state.excludedEvents.has(e.code));
+  if (!data.events.length) throw new Error("请至少选择一项检测事件。");
+  return JSON.stringify(data, null, 2);
+}
+$("prompt").oninput = syncPromptEditor;
+$("event-search").oninput = filterEvents;
+$("events-selected").onchange = filterEvents;
+$("events-all").onclick = () => {
+  state.excludedEvents.clear();
+  saveEventSelection();
+  for (const input of $("event-editor").querySelectorAll('input[type="checkbox"]')) input.checked = true;
+  filterEvents();
+};
+$("events-none").onclick = () => {
+  state.excludedEvents = new Set((state.promptDraft?.events || []).map((e) => e.code));
+  saveEventSelection();
+  for (const input of $("event-editor").querySelectorAll('input[type="checkbox"]')) input.checked = false;
+  filterEvents();
+};
 function selectImage(id) {
   state.selected = id;
   renderImages();
@@ -226,7 +402,7 @@ async function history() {
   if (!data.items.length) host.append(element("p", "尚无运行记录", "muted"));
   for (const item of data.items) {
     const row = element("div", undefined, "history-row");
-    const open = element("button", new Date(item.created_at).toLocaleString());
+    const open = element("button", formatTime(item.created_at));
     open.onclick = () => action(() => loadRound(item.id));
     row.append(
       open,
@@ -237,7 +413,7 @@ async function history() {
     reuse.onclick = () =>
       action(async () => {
         await loadRound(item.id);
-        $("prompt").value = state.round.prompt_text;
+        loadPrompt(state.round.prompt_text);
         const c = state.round.controls;
         $("thinking").checked = c.thinking;
         $("budget").disabled = !c.thinking;
@@ -258,7 +434,7 @@ $("thinking").onchange = () => {
 };
 $("show-original").onchange = renderImages;
 $("reset").onclick = () => {
-  $("prompt").value = state.config.default_prompt;
+  loadPrompt(state.config.default_prompt);
 };
 $("files").onchange = () =>
   action(async () => {
@@ -285,7 +461,7 @@ $("run").onclick = () =>
       request_id: crypto.randomUUID(),
       image_ids: state.images.map((i) => i.id),
       model_keys: keys,
-      prompt_text: $("prompt").value,
+      prompt_text: selectedPrompt(),
       controls: {
         thinking,
         thinking_budget: thinking && $("budget").value.trim() !== "" ? Number($("budget").value) : null,
@@ -311,7 +487,7 @@ $("refresh-history").onclick = () => action(history);
 action(async () => {
   state.config = await api("/api/config");
   $("simulation").hidden = !state.config.simulation;
-  $("prompt").value = state.config.default_prompt;
+  loadPrompt(state.config.default_prompt, true);
   for (const model of state.config.models) {
     const label = element("label", undefined, "model");
     const input = element("input");
@@ -377,7 +553,7 @@ function updateCompareOptions(data) {
     for (const item of data.items) {
       const option = element(
         "option",
-        new Date(item.created_at).toLocaleString() +
+        formatTime(item.created_at) +
           " · " +
           item.id.slice(0, 8),
       );

@@ -4,8 +4,8 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width,initial-scale=1" />
     <title>HOS · 视觉模型实验室</title>
-    <link rel="stylesheet" href="/static/styles.css" />
-    <script src="/static/app.js" defer></script>
+    <link rel="stylesheet" href="/static/styles.css?v=20260912-history-4" />
+    <script src="/static/app.js?v=20260912-history-4" defer></script>
   </head>
   <body>
     <header>
@@ -21,7 +21,7 @@
       </p>
       <p id="error" class="error" role="alert" hidden></p>
       <div class="workspace">
-        <section class="panel">
+        <section class="panel image-panel">
           <div class="section-heading">
             <h2>01 / 图片组</h2>
             <span id="image-count">0 / 20</span>
@@ -40,7 +40,7 @@
           </p>
           <div id="thumbnails" class="thumbnails"></div>
           <img id="preview" class="preview" alt="当前检测图片" hidden />
-          <label class="muted"
+          <label class="muted check"
             ><input
               id="show-original"
               type="checkbox"
@@ -48,12 +48,15 @@
           >
           <p id="image-meta" class="muted"></p>
         </section>
-        <section class="panel">
+        <section class="panel input-panel">
           <h2>02 / 模型与输入</h2>
+          <div class="input-settings">
           <fieldset>
             <legend>参与对比的模型</legend>
             <div id="models" class="models"></div>
           </fieldset>
+          <fieldset>
+            <legend>本轮推理参数</legend>
           <div class="controls">
             <label class="check"
               ><input id="thinking" type="checkbox" />开启思考</label
@@ -63,7 +66,7 @@
                 type="number"
                 min="1"
                 step="1"
-                value="1024"
+                value="2048"
                 disabled /></label
             ><label
               >MAX_TOKENS<input
@@ -86,13 +89,40 @@
           <p class="muted">
             总生成上限包含思考与回答。不兼容的设置会拒绝整轮，不会静默忽略。
           </p>
-          <div class="section-heading">
-            <label for="prompt">检测规则（JSON）</label
-            ><button id="reset" class="subtle" type="button">恢复默认</button>
+          </fieldset>
           </div>
-          <textarea id="prompt" spellcheck="false" rows="12"></textarea>
-          <p class="muted">创建轮次时转换为分节文本发送；可在结果中查看该轮实际提示词。</p>
-          <div class="actions">
+        </section>
+      </div>
+      <section class="panel events-panel">
+          <div class="section-heading">
+            <h2>本轮检测事件</h2>
+            <button id="reset" class="subtle" type="button">恢复默认</button>
+          </div>
+          <p class="muted">左侧勾选检测范围，点击事件名称在右侧微调。修改即时保留在当前草稿，仅已选事件参与本轮检测。</p>
+          <div class="event-tools">
+            <label for="event-search">查找事件</label>
+            <input id="event-search" type="search" placeholder="搜索名称或编码" />
+            <button id="events-all" class="subtle" type="button">全选</button>
+            <button id="events-none" class="subtle" type="button">清空选择</button>
+          </div>
+          <p id="event-count" class="muted" role="status"></p>
+          <p id="event-error" class="error" role="alert" hidden></p>
+          <label class="check"><input id="events-selected" type="checkbox" />只看已选事件</label>
+          <div class="event-workspace">
+            <div>
+              <div id="event-editor" class="event-editor" aria-label="事件目录"></div>
+              <p id="events-empty" class="muted" hidden>没有匹配事件，请修改搜索或关闭“只看已选”。</p>
+            </div>
+            <div id="event-detail" class="event-detail" aria-label="当前事件规则"></div>
+          </div>
+          <details id="prompt-source">
+            <summary>完整 JSON / 通用指令</summary>
+            <p class="muted">可修改通用指令或增删事件；事件列表同步更新，新事件默认选中。</p>
+            <label for="prompt">完整提示词草稿（包含未选事件）</label>
+            <textarea id="prompt" spellcheck="false" rows="12"></textarea>
+          </details>
+          <p class="muted">创建轮次时将已选规则转换为分节文本；可在结果中查看实际提示词。</p>
+          <div class="actions run-actions">
             <button id="run" class="primary">开始对比</button
             ><button id="stop" disabled>停止待开始项</button
             ><span id="run-status" role="status">准备就绪</span>
@@ -100,8 +130,7 @@
           <p class="muted">
             运行时仍可编辑下一轮，已创建的输入快照不会改变。停止不会撤销已发出的请求。
           </p>
-        </section>
-      </div>
+      </section>
       <section class="panel results">
         <div class="section-heading">
           <h2>03 / 检测结果</h2>
@@ -114,7 +143,7 @@
       </section>
       <section class="panel history">
         <div class="section-heading">
-          <h2>运行历史</h2>
+          <h2>运行历史（北京时间）</h2>
           <button id="refresh-history" class="subtle">刷新</button>
         </div>
         <div id="history"></div>

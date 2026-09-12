@@ -88,3 +88,14 @@ T035：新增测试先得到 2 failed、2 passed，修改后全套 `uv run pytes
 `uv run pytest -q`：72 passed，1 个 Starlette/AnyIO 依赖弃用警告；`uv build` 成功；`git diff --check` 无空白错误。MockTransport 覆盖 LangChain 实际请求、两套连接并发隔离、相同图片/原样提示词、思考开关及预算透传、原始扩展 usage 保留、HTTP 错误、超时、格式错误、脱敏与无自动重试。旧 PROFILE 环境变量不再影响可运行性，27B 缺失密钥不回退。
 
 未执行真实模型 API 或浏览器验收，T030/T033 保持未完成。27B 采用 Qwen 参数形式，需由实际独立服务验证。没有 Git 提交或推送。既有带非空 profile 的历史快照保持原样；其重试可能因身份变化被既有校验拒绝，可用相同输入创建新轮。
+# 2026-09-12 事件选择与单项规则编辑
+
+- `node --check src/hos_vlm_lab/static/app.js` 通过。
+- `uv run pytest -q tests/test_prompt_snapshot.py tests/test_prompts.py`：5 项通过。
+- 在禁止出站网络的 `tests.browser_app` 上运行 `tests/browser_event_editor.js`：22 项独立展示、空选择拦截、搜索、单项编辑、实际创建请求仅含已选事件、后端冻结快照、恢复默认不改历史、完整 JSON 同步、嵌套 JSON 错误拦截及新章节 390px 布局检查通过。
+- 桌面和手机截图位于 `.test-data/event-editor-desktop.png` / `event-editor-mobile.png`。后续按使用需求调整桌面图片/输入列宽、图片栏吸附、模型与参数并排、运行操作栏底部吸附及窄屏换行；浏览器功能回归通过，1440/1024/768/390/320px 整页无横向溢出，历史对照栏溢出已修复。
+- 未调用真实模型，未验证真实模型识别效果；本次不涉及 API 或存储结构变更。
+
+## 2026-09-12 事件工作区易用性修正
+
+移除遮挡事件的底部吸附按钮，图片与参数置于上方，事件目录和当前规则编辑器在下方整行展示。浏览器回归验证通过，另验证只看已选、切换事件保留草稿；1440/1024/768/390/320px 无横向溢出。仅模拟调用，无真实模型调用。此前吸附布局记录为历史验证，不代表当前布局。
