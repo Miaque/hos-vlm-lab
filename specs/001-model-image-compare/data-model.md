@@ -30,6 +30,8 @@ rounds.stop_requested仅记录本轮曾收到停止，不再作为新重试批�
 
 ## 一致性
 
+开启切片的轮次在 JSON 快照增加 `image_detection_inputs`，按 image_id 保存 `{views, version, prompt}`；views 每项为 `{id, bbox, event_codes}`，坐标基于统一处理图，full 的 bbox 为 null。非宽图 views 为空，prompt 沿用整图文本。version 当前为 horizontal-3-overlap25-jpeg95-v1；重试按保存坐标从不可变处理图编码，不重新选择策略或编排提示词。attempt 的 detection_input 保留对应输入信息。无需数据库表迁移；没有该字段的旧轮次沿用原调用路径。
+
 - 图片先写临时文件并原子重命名，再写元数据；失败可留下无引用文件但不能留下有效记录指向未写完文件。
 - 创建round、关联图片、全部attempt在一次事务提交，提交后才调度。
 - request_id相同且内容相同返回原记录，不再次调用；不同内容409。重试也遵循此规则。
@@ -37,6 +39,8 @@ rounds.stop_requested仅记录本轮曾收到停止，不再作为新重试批�
 - 数据库故障导致终态无法写入时停止新增调度；重启后按中断处理，不自动重复远端调用。
 
 ## 协议与计费
+
+attempt JSON 快照增加可选 request_body、request_http、response_http；无需改表。请求正文来自 HTTPX 发送钩子，含完整图片 Data URL，响应正文仍为 raw_response。HTTP 元数据和正文使用脱敏值保存；授权、Cookie、密钥及 token 类报文头不保存原值。请求记录表明进入发送流程，不保证远端收到。超时保留请求、响应缺失为未知；旧记录不补造。轮次摘要排除完整请求正文以避免轮询携带大图数据。
 
 controls：thinking为boolean，temperature有限数值且必填，max_tokens正整数且必填；thinking=true时thinking_budget可为null或正整数（小于max_tokens），false要求null。预算仅用于Qwen；逐模型映射思考开关与温度，实际参数独立保存，不把bool当整数。
 

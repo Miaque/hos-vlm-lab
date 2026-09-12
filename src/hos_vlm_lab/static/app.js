@@ -109,21 +109,29 @@ function readPromptDraft() {
     if (!event || typeof event.code !== "string" || !event.code.trim() ||
         typeof event.name !== "string" || !event.name.trim() || codes.has(event.code))
       throw new Error("每项事件需要非空名称和唯一编码，请修正完整 JSON。");
+    if ("tile_detection" in event && typeof event.tile_detection !== "boolean")
+      throw new Error("事件 tile_detection 必须为布尔值。");
     codes.add(event.code);
   }
   return data;
 }
 const eventSelectionKey = "hos-vlm-lab.excluded-events.v1";
+const eventViewKey = "hos-vlm-lab.event-view.v1";
 function saveEventSelection() {
   try {
     localStorage.setItem(eventSelectionKey, JSON.stringify([...state.excludedEvents]));
+    if (state.promptDraft) localStorage.setItem(eventViewKey, JSON.stringify({
+      tiledEvents: state.promptDraft.events.filter(e => e.tile_detection === true).map(e => e.code),
+      onlySelected: $("events-selected").checked,
+    }));
   } catch (exc) {
-    error(new Error("无法保存事件选择，刷新后可能丢失：" + exc.message));
+    error(new Error("无法保存事件设置，刷新后可能丢失：" + exc.message));
   }
 }
 function loadPrompt(text, restoreSelection = false) {
   $("prompt").value = text;
   state.excludedEvents.clear();
+  $("events-selected").checked = false;
   if (restoreSelection) {
     try {
       const saved = JSON.parse(localStorage.getItem(eventSelectionKey));
@@ -133,8 +141,20 @@ function loadPrompt(text, restoreSelection = false) {
       // 本地存储不可用或内容损坏时，仍允许使用默认事件。
     }
   }
+  if (restoreSelection) {
+    try {
+      const saved = JSON.parse(localStorage.getItem(eventViewKey));
+      if (Array.isArray(saved?.tiledEvents) && saved.tiledEvents.every(code => typeof code === "string")) {
+        const draft = readPromptDraft();
+        for (const event of draft.events) event.tile_detection = saved.tiledEvents.includes(event.code);
+        $("prompt").value = JSON.stringify(draft, null, 2);
+      }
+      $("events-selected").checked = saved?.onlySelected === true;
+    } catch {
+      // 配置损坏或存储不可用时保留默认状态，不影响编辑器加载。
+    }
+  }
   $("event-search").value = "";
-  $("events-selected").checked = false;
   syncPromptEditor();
   if (!restoreSelection) saveEventSelection();
 }
@@ -179,13 +199,37 @@ function renderEventEditor() {
     detail.dataset.code = event.code;
     detail.hidden = true;
     detail.append(element("h3", event.name), element("p", event.code, "muted"));
+    const tileToggle = element("button", undefined, "event-tile");
+    tileToggle.type = "button";
+    tileToggle.setAttribute("aria-label", "直接切片检测：" + event.name);
+    const updateTileState = () => {
+      const enabled = event.tile_detection === true;
+      tileToggle.setAttribute("aria-pressed", String(enabled));
+      tileToggle.title = `切片检测${enabled ? "已开启，点击关闭" : "已关闭，点击开启"}`;
+    };
+    updateTileState();
+    const icon = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+    icon.setAttribute("viewBox", "0 0 24 24");
+    icon.setAttribute("aria-hidden", "true");
+    const panes = document.createElementNS(icon.namespaceURI, "path");
+    panes.setAttribute("d", "M4 4h16v16H4z M9 4v16 M15 4v16");
+    icon.append(panes);
+    tileToggle.append(icon);
+    tileToggle.onclick = () => {
+      event.tile_detection = event.tile_detection !== true;
+      updateTileState();
+      $("prompt").value = JSON.stringify(state.promptDraft, null, 2);
+      saveEventSelection();
+    };
     const summary = element("button", undefined, "event-open");
     summary.type = "button";
     summary.setAttribute("aria-label", "编辑规则：" + event.name);
     summary.onclick = () => openEvent(event.code);
-    summary.append(element("strong", event.name), element("small", event.code));
+    const eventCode = element("small", event.code);
+    eventCode.title = event.code;
+    summary.append(element("strong", event.name), eventCode);
     for (const [key, value] of Object.entries(event)) {
-      if (["name", "code"].includes(key)) continue;
+      if (["name", "code", "tile_detection"].includes(key)) continue;
       const label = element("label", names[key] || key);
       const input = element("textarea");
       const isText = typeof value === "string";
@@ -207,7 +251,7 @@ function renderEventEditor() {
       label.append(input);
       detail.append(label);
     }
-    row.append(check, summary);
+    row.append(check, summary, tileToggle);
     host.append(row);
     $("event-detail").append(detail);
   }
@@ -249,19 +293,25 @@ function selectedPrompt() {
   if (!data.events.length) throw new Error("请至少选择一项检测事件。");
   return JSON.stringify(data, null, 2);
 }
-$("prompt").oninput = syncPromptEditor;
+$("prompt").oninput = () => {
+  syncPromptEditor();
+  if (state.promptDraft) saveEventSelection();
+};
 $("event-search").oninput = filterEvents;
-$("events-selected").onchange = filterEvents;
+$("events-selected").onchange = () => {
+  saveEventSelection();
+  filterEvents();
+};
 $("events-all").onclick = () => {
   state.excludedEvents.clear();
   saveEventSelection();
-  for (const input of $("event-editor").querySelectorAll('input[type="checkbox"]')) input.checked = true;
+  for (const input of $("event-editor").querySelectorAll('.event-rule > input')) input.checked = true;
   filterEvents();
 };
 $("events-none").onclick = () => {
   state.excludedEvents = new Set((state.promptDraft?.events || []).map((e) => e.code));
   saveEventSelection();
-  for (const input of $("event-editor").querySelectorAll('input[type="checkbox"]')) input.checked = false;
+  for (const input of $("event-editor").querySelectorAll('.event-rule > input')) input.checked = false;
   filterEvents();
 };
 function selectImage(id) {
@@ -309,7 +359,7 @@ function renderResults() {
   promptDetails.style.gridColumn = "1 / -1";
   promptDetails.append(
     element("summary", "本轮实际发送的提示词"),
-    element("pre", round.rendered_prompt_text ?? round.prompt_text),
+    element("pre", round.image_detection_inputs?.[state.selected]?.prompt ?? round.rendered_prompt_text ?? round.prompt_text),
   );
   host.append(promptDetails);
   $("progress").textContent = Object.entries(round.counts)
@@ -320,13 +370,27 @@ function renderResults() {
   )) {
     const model = round.model_snapshot.find((m) => m.key === attempt.model_key);
     const card = element("article", undefined, "result-card");
-    card.append(
+    const heading = element("div", undefined, "result-heading");
+    const inspect = element("button", undefined, "packet-open");
+    inspect.type = "button";
+    inspect.title = "查看请求与响应报文";
+    inspect.setAttribute("aria-label", `${model?.label || attempt.model_key} · 尝试 ${attempt.attempt_no}：查看报文`);
+    const icon = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+    icon.setAttribute("viewBox", "0 0 24 24");
+    icon.setAttribute("aria-hidden", "true");
+    const path = document.createElementNS(icon.namespaceURI, "path");
+    path.setAttribute("d", "M8 4H4v16h4 M16 4h4v16h-4 M10 8l-3 4 3 4 M14 8l3 4-3 4");
+    icon.append(path);
+    inspect.append(icon);
+    inspect.onclick = () => openPacket(attempt, model);
+    heading.append(
       element(
         "h3",
         `${model?.label || attempt.model_key} · 尝试 ${attempt.attempt_no}`,
       ),
-      element("span", labels[attempt.status] || attempt.status, "status"),
+      inspect,
     );
+    card.append(heading, element("span", labels[attempt.status] || attempt.status, "status"));
     if (attempt.status === "succeeded") {
       if (!attempt.parsed_events.length)
         card.append(element("p", "未检出（不代表确认不存在）", "muted"));
@@ -372,6 +436,122 @@ function renderResults() {
     host.append(card);
   }
 }
+
+function packetTree(value, key = "正文", depth = 0) {
+  if (key === "content" && typeof value === "string") {
+    try {
+      const parsed = JSON.parse(value);
+      if (parsed !== null && typeof parsed === "object") {
+        const section = element("details", undefined, "packet-node");
+        section.open = true;
+        section.append(element("summary", "content · JSON 字符串（阅读视图）"), packetTree(parsed, "内容", depth + 1));
+        return section;
+      }
+    } catch { /* 普通文本保留换行显示。 */ }
+  }
+  if (value !== null && typeof value === "object") {
+    const section = element("details", undefined, "packet-node");
+    section.open = depth < 5;
+    const entries = Object.entries(value);
+    const summary = element("summary");
+    summary.append(element("span", key, "packet-key"), element("small", ` ${Array.isArray(value) ? "数组" : "对象"} · ${entries.length} 项`, "muted"));
+    section.append(summary);
+    for (const [name, item] of entries) section.append(packetTree(item, name, depth + 1));
+    return section;
+  }
+  const row = element("div", undefined, "packet-value");
+  row.append(element("span", key, "packet-key"));
+  const text = typeof value === "string" ? value : JSON.stringify(value);
+  if (text.length > 120 || text.includes("\n")) row.classList.add("packet-long");
+  if (typeof value === "string" && value.startsWith("data:image/")) {
+    const folded = element("details");
+    folded.append(element("summary", `图片 Data URL · ${value.length.toLocaleString()} 字符 · 展开完整内容`));
+    folded.addEventListener("toggle", () => {
+      if (folded.open && !folded.querySelector("pre")) folded.append(element("pre", text));
+    });
+    row.append(folded);
+  } else row.append(element("pre", text, typeof value === "string" ? "packet-string" : "packet-literal"));
+  return row;
+}
+
+async function openPacket(attempt, model) {
+  const dialog = $("packet-dialog");
+  dialog.dataset.attemptId = attempt.id;
+  $("packet-title").textContent = `${model?.label || attempt.model_key} · 尝试 ${attempt.attempt_no}`;
+  $("packet-context").textContent = `${state.images.find(i => i.id === attempt.image_id)?.original_name || attempt.image_id} · ${labels[attempt.status] || attempt.status}`;
+  $("packet-content").replaceChildren(element("p", "正在读取报文…", "muted"));
+  $("packet-meta").replaceChildren();
+  $("packet-copy").disabled = true;
+  $("packet-note").textContent = "";
+  $("packet-images-option").hidden = true;
+  $("packet-request").disabled = $("packet-response").disabled = $("packet-format").disabled = true;
+  dialog.showModal();
+  try {
+    const data = await api("/api/attempts/" + attempt.id);
+    if (!dialog.open || dialog.dataset.attemptId !== attempt.id) return;
+    let side = "request";
+    $("packet-format").value = "json";
+    $("packet-images").checked = false;
+    const render = () => {
+      const request = side === "request";
+      const raw = request ? data.request_body : data.raw_response;
+      const meta = request ? data.request_http : data.response_http;
+      const format = $("packet-format").value;
+      $("packet-images-option").hidden = format !== "json";
+      $("packet-request").setAttribute("aria-pressed", String(request));
+      $("packet-response").setAttribute("aria-pressed", String(!request));
+      $("packet-meta").replaceChildren();
+      if (meta) {
+        $("packet-meta").append(element("p", request ? `${meta.method} ${meta.url}` : `HTTP ${meta.status_code}`, "packet-http"));
+        const headers = element("details");
+        headers.append(element("summary", "HTTP 报文头（敏感字段已脱敏）"), packetTree(meta.headers, "headers"));
+        $("packet-meta").append(headers);
+      }
+      $("packet-copy").disabled = raw == null;
+      $("packet-note").textContent = "敏感信息已脱敏；阅读视图展开字符串换行，图片内容默认折叠。原文与复制保留完整正文。";
+      if (format === "json" && !$("packet-images").checked)
+        $("packet-note").textContent = "JSON 视图中的图片数据已用占位说明替代，可勾选显示完整图片数据。原文与复制始终保留完整脱敏正文。";
+      if (raw == null) {
+        $("packet-content").replaceChildren(element("p", request ? "此尝试没有记录完整请求报文（旧记录或尚未发出请求），不使用参数拼接替代。" : "此尝试没有收到或记录响应正文。", "muted"));
+      } else {
+        let content = element("pre", raw, "packet-raw-text");
+        if (format !== "raw") {
+          try {
+            const parsed = JSON.parse(raw);
+            content = format === "json"
+              ? element("pre", JSON.stringify(parsed, (key, value) => {
+                  if (!$("packet-images").checked && typeof value === "string" && /^data:image\/[^,]*;base64,/i.test(value)) {
+                    const comma = value.indexOf(",");
+                    return `${value.slice(0, comma + 1)}[图片数据已折叠：${value.length - comma - 1} 个 Base64 字符]`;
+                  }
+                  return value;
+                }, 2), "packet-raw-text")
+              : packetTree(parsed);
+          } catch {
+            $("packet-note").textContent = "正文不是有效 JSON，已按原文展示（敏感信息已脱敏）。";
+          }
+        }
+        $("packet-content").replaceChildren(content);
+      }
+      $("packet-copy").onclick = async () => {
+        try {
+          await navigator.clipboard.writeText(raw);
+          $("packet-note").textContent = "已复制完整正文（脱敏后，包含完整图片 Data URL）。";
+        } catch { $("packet-note").textContent = "复制失败，请切换原文视图手动选择复制。"; }
+      };
+    };
+    $("packet-request").onclick = () => { side = "request"; render(); };
+    $("packet-response").onclick = () => { side = "response"; render(); };
+    $("packet-format").onchange = render;
+    $("packet-images").onchange = render;
+    $("packet-request").disabled = $("packet-response").disabled = $("packet-format").disabled = false;
+    render();
+  } catch (exc) {
+    if (dialog.open && dialog.dataset.attemptId === attempt.id)
+      $("packet-content").replaceChildren(element("p", exc.message, "error"));
+  }
+}
+$("packet-close").onclick = () => $("packet-dialog").close();
 async function loadRound(id) {
   clearTimeout(state.timer);
   const round = await api("/api/rounds/" + id);
@@ -600,7 +780,7 @@ $("compare").onclick = () =>
         element("summary", label + " · 提示词与参数快照"),
         element(
           "pre",
-          (round.rendered_prompt_text ?? round.prompt_text) + "\n" + JSON.stringify(round.controls, null, 2),
+          (round.image_detection_inputs ? JSON.stringify(round.image_detection_inputs, null, 2) : (round.rendered_prompt_text ?? round.prompt_text)) + "\n" + JSON.stringify(round.controls, null, 2),
         ),
       );
       snapshots.append(detail);

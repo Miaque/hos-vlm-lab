@@ -4,10 +4,11 @@ import asyncio
 import time
 
 from .config import build_parameters
-from .models import LabError, parse_prompt
+from .models import LabError, parse_prompt, _json
+from .images import detection_views, encode_views
 from .store import now
 from .gateway import calculate_cost, normalize_usage
-from .prompts import PROMPT_RENDERER_VERSION, render_prompt
+from .prompts import PROMPT_RENDERER_VERSION, render_prompt, render_view_prompt
 
 
 class Runner:
@@ -49,8 +50,7 @@ class Runner:
                 selected.append(model)
             if errors:
                 raise LabError("所选模型存在不兼容配置", details=errors)
-            for identity in request.image_ids:
-                await self.store.image(identity)
+            images = [await self.store.image(identity) for identity in request.image_ids]
             snapshot = payload | {
                 "request": payload,
                 "rendered_prompt_text": render_prompt(request.prompt_text),
@@ -59,6 +59,16 @@ class Runner:
                 "model_snapshot": [m.identity() for m in selected],
                 "pricing_snapshot": {m.key: m.pricing for m in selected},
             }
+            tiled_codes = [event["code"] for event in _json(request.prompt_text)["events"] if event.get("tile_detection", False)]
+            if tiled_codes:
+                snapshot["image_detection_inputs"] = {}
+                for image in images:
+                    views = detection_views(image, tiled_codes, list(snapshot["event_snapshot"]))
+                    snapshot["image_detection_inputs"][image["id"]] = {
+                        "views": views,
+                        "version": "horizontal-3-overlap25-jpeg95-v1",
+                        "prompt": render_view_prompt(snapshot["rendered_prompt_text"], views) if views else snapshot["rendered_prompt_text"],
+                    }
             rid, created = await self.store.create_round(snapshot, parameters)
             if created:
                 self.round_id = rid
@@ -85,6 +95,12 @@ class Runner:
                     image_bytes = await asyncio.to_thread(
                         (self.config.data_dir / image["prepared_path"]).read_bytes
                     )
+                    detection_input = snapshot.get("image_detection_inputs", {}).get(attempt["image_id"])
+                    prompt = snapshot.get("rendered_prompt_text", snapshot["prompt_text"])
+                    if detection_input:
+                        prompt = detection_input["prompt"]
+                        if detection_input["views"]:
+                            image_bytes = await asyncio.to_thread(encode_views, image_bytes, detection_input["views"])
                     async with self.lock:
                         if self.cancel_requested or self.failure:
                             return
@@ -94,10 +110,12 @@ class Runner:
                     result = await self.gateway.call(
                         model,
                         image_bytes,
-                        snapshot.get("rendered_prompt_text", snapshot["prompt_text"]),
+                        prompt,
                         attempt["request_parameters"],
                         snapshot["event_snapshot"],
                     )
+                    if detection_input:
+                        result["detection_input"] = detection_input
                     result.setdefault(
                         "elapsed_ms", round((time.monotonic() - started) * 1000)
                     )

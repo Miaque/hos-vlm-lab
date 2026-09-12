@@ -105,6 +105,8 @@ def parse_prompt(text: str) -> dict[str, str]:
             raise ValueError("事件须包含非空 code 和 name")
         if code in result:
             raise ValueError("事件 code 不能重复")
+        if "tile_detection" in event and type(event["tile_detection"]) is not bool:
+            raise ValueError("事件 tile_detection 必须为布尔值")
         result[code] = name
     return result
 

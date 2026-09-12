@@ -4,8 +4,8 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width,initial-scale=1" />
     <title>HOS · 视觉模型实验室</title>
-    <link rel="stylesheet" href="/static/styles.css?v=20260912-history-4" />
-    <script src="/static/app.js?v=20260912-history-4" defer></script>
+    <link rel="stylesheet" href="/static/styles.css?v=20260912-event-prefs-10" />
+    <script src="/static/app.js?v=20260912-event-prefs-10" defer></script>
   </head>
   <body>
     <header>
@@ -106,6 +106,7 @@
             <button id="events-none" class="subtle" type="button">清空选择</button>
           </div>
           <p id="event-count" class="muted" role="status"></p>
+          <p class="muted">每行右侧分割图标控制切片检测，绿色表示开启，默认关闭。宽高比 ≥ 3 时使用三张重叠约 25% 的切片，其他图片使用整图；图像用量可能增加。</p>
           <p id="event-error" class="error" role="alert" hidden></p>
           <label class="check"><input id="events-selected" type="checkbox" />只看已选事件</label>
           <div class="event-workspace">
@@ -161,6 +162,27 @@
         <div id="comparison"></div>
       </section>
     </main>
+    <dialog id="packet-dialog" aria-labelledby="packet-title">
+      <div class="packet-heading">
+        <div><h2 id="packet-title">请求与响应报文</h2><p id="packet-context" class="muted"></p></div>
+        <button id="packet-close" type="button" autofocus>关闭</button>
+      </div>
+      <div class="packet-toolbar">
+        <div class="packet-switch" role="group" aria-label="报文类型">
+          <button id="packet-request" type="button" aria-pressed="true">请求</button>
+          <button id="packet-response" type="button" aria-pressed="false">响应</button>
+        </div>
+        <label>显示格式 <select id="packet-format" aria-label="报文显示格式">
+          <option value="read">阅读视图</option>
+          <option value="json" selected>JSON 格式</option>
+          <option value="raw">原文</option>
+        </select></label>
+        <label id="packet-images-option" class="check" hidden><input id="packet-images" type="checkbox" />显示完整图片数据</label>
+        <button id="packet-copy" type="button">复制完整正文</button>
+      </div>
+      <p id="packet-note" class="muted" role="status"></p>
+      <div class="packet-scroll"><div id="packet-meta"></div><div id="packet-content"></div></div>
+    </dialog>
     <footer>本机实验工作台 · “未检出”不等于确认不存在 · 无自动重试</footer>
   </body>
 </html>

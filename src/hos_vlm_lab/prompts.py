@@ -30,7 +30,7 @@ def render_prompt(text: str) -> str:
     for event in data["events"]:
         lines = [f"## {event['name']}", f"事件编码：{event['code']}"]
         for key, value in event.items():
-            if key not in {"code", "name"}:
+            if key not in {"code", "name", "tile_detection"}:
                 lines.append(f"{labels.get(key, key)}：{display(value)}")
         events.append("\n".join(lines))
     sections.append("# 待检测事件\n" + "\n\n".join(events))
@@ -52,3 +52,16 @@ def render_prompt(text: str) -> str:
         output += "\n以下 output 仅为结构示意，必须替换占位文字及示例数值，不代表本图存在事件：\n" + display(data["output"])
     sections.append(output)
     return "\n\n".join(sections)
+
+
+def render_view_prompt(prompt: str, views: list[dict]) -> str:
+    return prompt + (
+        "\n\n# 本次图像视图分配（优先于通用的单图说明）\n"
+        "下列图像均来自同一张图片，顺序与视图列表一致；每个事件仅使用 event_codes 指定的视图。\n"
+        "full 是整图；T0、T1、T2 是由左至右、相邻重叠约 25% 的全高切片，坐标基于处理后图片。\n"
+        "切片直接检测，不等待整图初筛；逐片独立判断，不跨片拼凑证据。"
+        "证据被切片边界截断、关键关系延伸到片外或需要猜测片外内容时不命中。\n"
+        "同一事件多片命中时只返回置信度最高的一项，evidence 注明视图编号；未命中则不返回。"
+        "仍严格使用上述 events 输出结构。\n"
+        + json.dumps(views, ensure_ascii=False)
+    )

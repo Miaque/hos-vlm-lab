@@ -2,6 +2,7 @@
 
 import hashlib
 import warnings
+from math import ceil
 from datetime import datetime, timezone
 from io import BytesIO
 from pathlib import Path
@@ -13,6 +14,33 @@ from .models import LabError
 
 MAX_BYTES = 10 * 1024 * 1024
 MAX_PIXELS = 20_000_000
+
+
+def detection_views(image: dict, tiled_codes: list[str], all_codes: list[str]) -> list[dict]:
+    """沿用 hos-analysis 的宽图门槛、三片及 25% 重叠。坐标基于统一处理图。"""
+    if not tiled_codes or image["width"] < image["height"] * 3:
+        return []
+    width, height = image["width"], image["height"]
+    tile_width = ceil(width / 2.5)
+    full_codes = [code for code in all_codes if code not in tiled_codes]
+    views = ([{"id": "full", "bbox": None, "event_codes": full_codes}] if full_codes else [])
+    for index in range(3):
+        left = round(index * (width - tile_width) / 2)
+        views.append({"id": f"T{index}", "bbox": [left, 0, left + tile_width, height], "event_codes": tiled_codes})
+    return views
+
+
+def encode_views(image: bytes, views: list[dict]) -> list[bytes]:
+    with Image.open(BytesIO(image)) as source:
+        result = []
+        for view in views:
+            if view["bbox"] is None:
+                result.append(image)
+            else:
+                stream = BytesIO()
+                source.crop(tuple(view["bbox"])).save(stream, "JPEG", quality=95)
+                result.append(stream.getvalue())
+        return result
 
 
 def prepare_images(files: list[tuple[str, bytes]], data_dir: Path) -> list[dict]:

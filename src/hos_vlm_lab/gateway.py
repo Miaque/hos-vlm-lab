@@ -16,6 +16,22 @@ from openai import APIConnectionError, APITimeoutError
 from .models import _json, parse_events
 
 
+def redact(value, keys):
+    if isinstance(value, str):
+        for key in keys:
+            value = value.replace(key, "[REDACTED]")
+    elif isinstance(value, list):
+        value = [redact(v, keys) for v in value]
+    elif isinstance(value, dict):
+        value = {redact(k, keys): redact(v, keys) for k, v in value.items()}
+    return value
+
+
+def safe_headers(headers, keys):
+    return {name: "[REDACTED]" if any(word in name.lower() for word in ("authorization", "cookie", "key", "token", "secret")) else redact(value, keys)
+            for name, value in headers.items()}
+
+
 def normalize_usage(raw):
     raw = raw if isinstance(raw, dict) else {}
 
@@ -79,7 +95,15 @@ class Gateway:
         self.client = client
         self.secrets = secrets
         self._responses = ContextVar("gateway_responses", default=None)
+        self._requests = ContextVar("gateway_requests", default=None)
+        self.client.event_hooks["request"].append(self._capture_request)
         self.client.event_hooks["response"].append(self._capture_response)
+
+    async def _capture_request(self, request):
+        requests = self._requests.get()
+        if requests is not None:
+            await request.aread()
+            requests.append(request)
 
     async def _capture_response(self, response):
         responses = self._responses.get()
@@ -94,13 +118,13 @@ class Gateway:
                     "role": "user",
                     "content": [
                         {"type": "text", "text": prompt},
-                        {
+                        *[{
                             "type": "image_url",
                             "image_url": {
                                 "url": "data:image/jpeg;base64,"
-                                + base64.b64encode(image).decode()
+                                + base64.b64encode(view).decode()
                             },
-                        },
+                        } for view in (image if isinstance(image, list) else [image])],
                     ],
                 }
             ],
@@ -116,6 +140,9 @@ class Gateway:
             "error": None,
         }
         started = time.monotonic()
+        keys = tuple(k for k in (*self.secrets, model.api_key) if k)
+        requests = []
+        request_token = self._requests.set(requests)
         responses = []
         token = self._responses.set(responses)
         try:
@@ -141,25 +168,13 @@ class Gateway:
                 if not responses:
                     raise
             response = responses[0]
-            keys = tuple(k for k in (*self.secrets, model.api_key) if k)
-
-            def redact(value):
-                if isinstance(value, str):
-                    for key in keys:
-                        value = value.replace(key, "[REDACTED]")
-                elif isinstance(value, list):
-                    value = [redact(v) for v in value]
-                elif isinstance(value, dict):
-                    value = {redact(k): redact(v) for k, v in value.items()}
-                return value
-
-            raw = redact(response.text)
+            raw = redact(response.text, keys)
             result["raw_response"] = raw
             try:
                 data = _json(raw)
                 if not isinstance(data, dict):
                     raise ValueError("响应根节点必须是对象")
-                sanitized = redact(data)
+                sanitized = redact(data, keys)
                 if sanitized != data:
                     data = sanitized
                     result["raw_response"] = json.dumps(
@@ -193,6 +208,17 @@ class Gateway:
                 "message": "首次响应不符合事件协议，详见原文",
             }
         finally:
+            if requests:
+                request = requests[0]
+                raw = request.content.decode("utf-8")
+                original = _json(raw)
+                sanitized = redact(original, keys)
+                result["request_body"] = (json.dumps(sanitized, ensure_ascii=False) if sanitized != original else raw)
+                result["request_http"] = {"method": request.method, "url": redact(str(request.url), keys), "headers": safe_headers(request.headers, keys)}
+            if responses:
+                response = responses[0]
+                result["response_http"] = {"status_code": response.status_code, "headers": safe_headers(response.headers, keys)}
+            self._requests.reset(request_token)
             self._responses.reset(token)
             result["elapsed_ms"] = round((time.monotonic() - started) * 1000)
         return result

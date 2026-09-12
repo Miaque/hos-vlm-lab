@@ -6,19 +6,27 @@ async (page) => {
   assert(await page.evaluate(() => formatTime('2026-09-12T16:00:00Z')) === '2026年09月13日 00:00:00', '北京时间跨日及24小时制');
   const total = await page.locator('.event-rule').count();
   assert(total > 1, '事件应逐项展示');
+  const tile = page.locator('.event-rule').nth(1).getByRole('button', {name: /直接切片检测/});
+  assert(await tile.getAttribute('aria-pressed') === 'false', '切片默认关闭');
+  const editing = await page.locator('.event-rule.editing').getAttribute('data-code');
+  await tile.click();
+  assert(await page.locator('.event-rule.editing').getAttribute('data-code') === editing, '切片开关无需打开编辑器');
+  await page.getByRole('button', {name: '全选', exact: true}).click();
+  assert(await page.locator('.event-tile[aria-pressed="true"]').count() === 1, '全选不改变切片设置');
   await page.getByRole('button', { name: '清空选择', exact: true }).click();
+  assert(await tile.getAttribute('aria-pressed') === 'true', '清空选择不改变切片设置');
   assert(await page.evaluate(() => {
     try { selectedPrompt(); return false; } catch { return true; }
   }), '空选择必须拦截');
   const first = page.locator('.event-rule').first();
-  await first.locator('input').check();
+  await first.locator(':scope > input').check();
   await page.locator('#events-selected').check();
   assert(await page.locator('.event-rule:visible').count() === 1, '只看已选');
   await page.locator('#events-selected').uncheck();
-  await first.locator('button').click();
+  await first.locator('.event-open').click();
   await page.locator('#event-detail section:visible textarea').first().fill('本轮微调：只依据清晰的可见证据。');
-  await page.locator('.event-rule button').nth(1).click();
-  await first.locator('button').click();
+  await page.locator('.event-rule .event-open').nth(1).click();
+  await first.locator('.event-open').click();
   assert((await page.locator('#event-detail section:visible textarea').first().inputValue()).includes('本轮微调'), '切换事件保留草稿');
   const selected = await page.evaluate(() => JSON.parse(selectedPrompt()));
   assert(selected.events.length === 1, '仅提交已选事件');
@@ -49,14 +57,14 @@ async (page) => {
   const frozen = await page.evaluate(() => state.round);
   assert(Object.keys(frozen.event_snapshot).length === 1 && frozen.rendered_prompt_text.includes('本轮微调'), '后端冻结选择与编辑');
   await page.getByRole('button', {name:'恢复默认',exact:true}).click();
-  assert(await page.locator('.event-rule input:checked').count() === total, '恢复默认全选');
+  assert(await page.locator('.event-rule > input:checked').count() === total, '恢复默认全选');
   assert(await page.evaluate(() => state.round.rendered_prompt_text) === frozen.rendered_prompt_text, '历史快照不变');
   await page.locator('#prompt-source summary').click();
   await page.locator('#prompt').fill('{');
   assert(await page.locator('#event-error').isVisible(), '非法 JSON 提示');
   await page.locator('#prompt').fill(JSON.stringify({events:[{code:'custom',name:'自定义',match:'原条件',extra:{a:1}}],context:'保留上下文'}));
   assert(await page.locator('.event-rule').count() === 1, '自定义事件同步');
-  await page.locator('.event-rule button').click();
+  await page.locator('.event-rule .event-open').click();
   await page.getByRole('textbox', {name:'自定义 · extra',exact:true}).fill('{');
   await page.getByRole('button', {name:'全选',exact:true}).click();
   assert(await page.evaluate(() => { try { selectedPrompt(); return false; } catch { return true; } }), '无效嵌套值不可静默丢弃');
@@ -66,7 +74,7 @@ async (page) => {
   await page.locator('#prompt-source summary').click();
   await page.setViewportSize({width:1440,height:1000});
   assert(await page.evaluate(() => Math.abs(document.querySelector('.image-panel').getBoundingClientRect().bottom - document.querySelector('.input-panel').getBoundingClientRect().bottom) < 1), '图片与模型面板底部对齐');
-  await page.locator('.event-rule button').first().click();
+  await page.locator('.event-rule .event-open').first().click();
   await page.screenshot({path:'.test-data/event-editor-desktop.png',fullPage:true});
   await page.setViewportSize({width:390,height:844});
   assert(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), '移动端整页不能横向溢出');
