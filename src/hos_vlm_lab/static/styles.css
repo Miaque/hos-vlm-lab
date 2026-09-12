@@ -276,11 +276,23 @@ textarea:focus-visible {
   border-radius: 4px;
 }
 .event {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  column-gap: 8px;
+  width: 100%;
+  min-width: 0;
+  overflow-wrap: anywhere;
   border-top: 1px solid #e8ede4;
   margin-top: 12px;
   padding-top: 10px;
 }
+.event > strong + small {
+  min-width: 0;
+  max-width: 100%;
+}
 .event p {
+  width: 100%;
   margin: 4px 0;
   font-size: 12px;
 }
