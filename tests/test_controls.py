@@ -25,9 +25,26 @@ def test_qwen_thinking_mapping(key):
 
 
 @pytest.mark.parametrize("key", ["deepseek", "kimi"])
-def test_unsupported_numeric_budget_rejected(key):
-    with pytest.raises(LabError, match="数值思考预算"):
-        build_parameters(model(key), Controls(thinking=True, thinking_budget=100, max_tokens=1000, temperature=0.6))
+@pytest.mark.parametrize("budget", [None, 100])
+def test_thinking_without_numeric_budget_support(key, budget):
+    parameters = build_parameters(model(key), Controls(thinking=True, thinking_budget=budget, max_tokens=1000, temperature=0.6))
+    expected = {"thinking": {"type": "enabled"}, "max_tokens": 1000}
+    if key == "kimi":
+        expected["temperature"] = 1.0
+    assert parameters == expected
+
+
+def test_kimi_non_thinking_fixed_temperature():
+    assert build_parameters(model("kimi"), Controls(thinking=False, max_tokens=1000, temperature=0)) == {
+        "thinking": {"type": "disabled"}, "max_tokens": 1000, "temperature": 0.6,
+    }
+
+
+@pytest.mark.parametrize("key", ["qwen36", "qwen38", "qwen36_27b"])
+def test_qwen_thinking_budget_optional(key):
+    assert build_parameters(model(key), Controls(thinking=True, max_tokens=1000, temperature=0.6)) == {
+        "enable_thinking": True, "max_completion_tokens": 1000, "temperature": 0.6,
+    }
 
 
 @pytest.mark.parametrize("temperature", [-0.1, 2.1])

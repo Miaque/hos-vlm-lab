@@ -71,10 +71,14 @@ def build_parameters(model: ModelConfig, controls: Controls) -> dict:
     if model.key in {"qwen36", "qwen38", "qwen36_27b"}:
         parameters["enable_thinking"] = controls.thinking
         if controls.thinking:
-            parameters["thinking_budget"] = controls.thinking_budget
+            if controls.thinking_budget is not None:
+                parameters["thinking_budget"] = controls.thinking_budget
             parameters["max_completion_tokens"] = parameters.pop("max_tokens")
     else:
-        if controls.thinking:
-            raise LabError(f"{model.label}：当前适配不支持数值思考预算，请关闭思考")
-        parameters["thinking"] = {"type": "disabled"}
+        # 页面明确预算仅用于 Qwen；这里保留各模型实际发送参数。
+        parameters["thinking"] = {"type": "enabled" if controls.thinking else "disabled"}
+        if model.key == "kimi":
+            parameters["temperature"] = 1.0 if controls.thinking else 0.6
+        elif model.key == "deepseek" and controls.thinking:
+            parameters.pop("temperature")
     return parameters

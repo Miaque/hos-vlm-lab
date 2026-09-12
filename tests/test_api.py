@@ -2,10 +2,42 @@ from io import BytesIO
 
 from fastapi.testclient import TestClient
 from PIL import Image
+import pytest
 
 from hos_vlm_lab.app import create_app
+from hos_vlm_lab.config import Config, ModelConfig
 from .fakes import FakeGateway, fake_parameters
 from .test_contracts import PROMPT
+
+
+@pytest.mark.parametrize("budget", [None, 2048])
+def test_create_thinking_round_all_models(tmp_path, budget):
+    keys = ["deepseek", "kimi", "qwen36", "qwen38", "qwen36_27b"]
+    config = Config(tuple(ModelConfig(k, k, "https://fake.invalid/v1/chat/completions", "test-only", k) for k in keys), tmp_path)
+    with TestClient(create_app(config, FakeGateway()), base_url="http://127.0.0.1:8000") as client:
+        models = client.get("/api/config").json()["models"]
+        assert all(m["capabilities"]["controls"]["thinking"] == [False, True] for m in models)
+        stream = BytesIO()
+        Image.new("RGB", (2, 2)).save(stream, "PNG")
+        image_id = client.post("/api/images", files=[("files", ("test.png", stream.getvalue(), "image/png"))]).json()["images"][0]["id"]
+        response = client.post("/api/rounds", json={
+            "request_id": "thinking", "image_ids": [image_id], "model_keys": keys,
+            "prompt_text": PROMPT,
+            "controls": {"thinking": True, "thinking_budget": budget, "max_tokens": 4096, "temperature": 0},
+        })
+        assert response.status_code == 202, response.text
+        round_data = client.get("/api/rounds/" + response.json()["round_id"]).json()
+        assert round_data["controls"]["thinking_budget"] == budget
+        for attempt in round_data["attempts"]:
+            params = client.get("/api/attempts/" + attempt["id"]).json()["request_parameters"]
+            key = attempt["model_key"]
+            if key in {"deepseek", "kimi"}:
+                assert params["thinking"] == {"type": "enabled"}
+                assert "thinking_budget" not in params
+                assert params.get("temperature") == (1.0 if key == "kimi" else None)
+            else:
+                assert params["enable_thinking"] is True
+                assert params.get("thinking_budget") == budget
 
 
 def test_upload_create_validation_and_secrets(config):

@@ -74,7 +74,7 @@ def test_wrappers_do_not_relax_json_validation(raw):
     [
         {"thinking_budget": 1},
         {"max_tokens": True},
-        {"thinking": True},
+        {"thinking": True, "thinking_budget": 1000},
         {"temperature": float("inf")},
     ],
 )

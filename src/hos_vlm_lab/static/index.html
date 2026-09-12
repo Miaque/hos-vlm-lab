@@ -58,7 +58,7 @@
             <label class="check"
               ><input id="thinking" type="checkbox" />开启思考</label
             ><label
-              >THINKING_BUDGET<input
+              >THINKING_BUDGET（仅 Qwen，可留空）<input
                 id="budget"
                 type="number"
                 min="1"
@@ -80,6 +80,9 @@
                 value="0"
             /></label>
           </div>
+          <p class="muted">
+            思考开关适用于全部模型。预算仅发送给 Qwen，留空使用服务端默认；DeepSeek 思考时不发送温度，Kimi 温度固定为思考 1.0／非思考 0.6，其余使用所填温度。实际发送参数可在结果中查看。
+          </p>
           <p class="muted">
             总生成上限包含思考与回答。不兼容的设置会拒绝整轮，不会静默忽略。
           </p>

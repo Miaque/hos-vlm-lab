@@ -38,7 +38,7 @@ rounds.stop_requested仅记录本轮曾收到停止，不再作为新重试批�
 
 ## 协议与计费
 
-controls：thinking为boolean，temperature有限数值且必填，max_tokens正整数且必填；thinking=true要求thinking_budget正整数，false要求null。进一步按profile约束校验，不把bool当整数。
+controls：thinking为boolean，temperature有限数值且必填，max_tokens正整数且必填；thinking=true时thinking_budget可为null或正整数（小于max_tokens），false要求null。预算仅用于Qwen；逐模型映射思考开关与温度，实际参数独立保存，不把bool当整数。
 
 events输出根对象只含events列表。每项仅canonical_event_code、confidence、evidence；编码属于本轮且唯一，confidence为有限0–1数字，evidence去空白后非空且原始长度不超过200。保留原文，解析失败不修正。
 

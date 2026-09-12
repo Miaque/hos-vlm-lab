@@ -136,9 +136,7 @@ def create_app(config=None, gateway=None, parameter_builder=build_parameters):
                         "adapter": "langchain-openai",
                         "strict_validation": False,
                         "controls": {
-                            "thinking": [False, True]
-                            if model.key in {"qwen36", "qwen38", "qwen36_27b"}
-                            else [False],
+                            "thinking": [False, True],
                             "thinking_budget": {"min": 1}
                             if model.key in {"qwen36", "qwen38", "qwen36_27b"}
                             else None,

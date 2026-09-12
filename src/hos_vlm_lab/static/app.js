@@ -241,7 +241,7 @@ async function history() {
         const c = state.round.controls;
         $("thinking").checked = c.thinking;
         $("budget").disabled = !c.thinking;
-        $("budget").value = c.thinking_budget ?? 1024;
+        $("budget").value = c.thinking_budget ?? "";
         $("max-tokens").value = c.max_tokens;
         $("temperature").value = c.temperature;
         for (const input of document.querySelectorAll("[data-model]"))
@@ -288,7 +288,7 @@ $("run").onclick = () =>
       prompt_text: $("prompt").value,
       controls: {
         thinking,
-        thinking_budget: thinking ? Number($("budget").value) : null,
+        thinking_budget: thinking && $("budget").value.trim() !== "" ? Number($("budget").value) : null,
         max_tokens: Number($("max-tokens").value),
         temperature: Number($("temperature").value),
       },

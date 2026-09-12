@@ -43,7 +43,7 @@
 
 同轮 1–20 张独立图片 × 1–5 个模型，统一图片字节与最终提示词；编辑器保留 JSON 规则，prompts.render_prompt 在创建轮次时编排为分节文本，冻结 rendered_prompt_text / prompt_renderer_version，与原始 prompt_text 一起保存。所有模型和重试使用同一冻结文本；旧轮次缺少新字段时沿用原始 JSON，不重新渲染。结果和历史对比可查看实际提示词。可调整 thinking、thinking_budget、max_tokens、temperature。完整预检通过后才创建轮次；连接缺失或本地不兼容设置拒绝整轮，不静默省略或改写参数。
 
-调用层使用 LangChain ChatOpenAI 对接 new-api / OpenAI 兼容入口，不再读取 *_PROFILE 或限制官方域名。原四模型共享连接，27B 独立且不回退。按模型槽位映射特殊参数：Qwen 使用 enable_thinking，开启时带 thinking_budget/max_completion_tokens；DeepSeek/Kimi 仅支持非思考数值参数。服务端能力和范围错误记录为调用失败，不静默改写参数。真实视觉和参数生效情况仍需验收，不能宣称五款真实模型已接通。
+调用层使用 LangChain ChatOpenAI 对接 new-api / OpenAI 兼容入口，不再读取 *_PROFILE 或限制官方域名。原四模型共享连接，27B 独立且不回退。按模型槽位映射特殊参数：Qwen 使用 enable_thinking，开启时带 max_completion_tokens，可选 thinking_budget；DeepSeek/Kimi 使用 thinking.type 开关，不发送数值预算。预算仅用于 Qwen；DeepSeek 思考时不发送 temperature，Kimi temperature 固定为思考 1.0／非思考 0.6。页面明确说明这些映射，实际参数保存在尝试快照中。服务端能力和范围错误记录为调用失败，不静默改写参数。真实视觉和参数生效情况仍需验收，不能宣称五款真实模型已接通。
 
 输出仅为 events 中的 canonical_event_code / confidence / evidence，不画框、不添加 uncertain 状态或自动准确率排行。有效空列表是“未检出”，解析或调用失败单独保留。默认提示词为 hos-analysis 全局默认模板的 22 项事件、用户提供的事件目录响应与当前初筛指令的本地快照，带来源信息；运行时不依赖生产目录，不将其中的区域/佩戴义务假设默认为用户现场事实。
 

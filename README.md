@@ -40,7 +40,7 @@ BASE_URL 包含服务路径前缀（例如 `https://your-host/v1`），不含 `/
 uv run hos-vlm-lab
 ```
 
-参数按模型槽位适配，模型 ID 可使用网关别名。Qwen 三个槽位发送 `enable_thinking`；开启时同时发送 `thinking_budget` 和 `max_completion_tokens`，关闭时发送 `max_tokens` 且不发送预算。DeepSeek/Kimi 非思考发送 `thinking.type=disabled` 和 `max_tokens`，暂不支持数值思考预算，开启时整轮预检拒绝。温度原样传递，本地校验 0–2；输出及预算必须为正整数，预算小于输出上限。
+参数按模型槽位适配，模型 ID 保持环境配置值。所有模型都支持本地思考开关映射。Qwen 三个槽位发送 `enable_thinking`；开启时发送 `max_completion_tokens`，预算填写时才发送 `thinking_budget`；关闭时发送 `max_tokens` 且不发送预算。DeepSeek/Kimi 发送 `thinking.type=enabled/disabled` 和 `max_tokens`，不发送数值预算。预算仅用于 Qwen，留空使用服务端默认。DeepSeek 思考时不发送温度，Kimi 温度固定为思考 1.0／非思考 0.6，其余原样传递；页面明确显示映射，实际参数保存在尝试快照。温度输入本地校验 0–2；输出及已填写预算必须为正整数，预算小于输出上限。
 
 连接齐全即可进行非思考请求，不再因缺少服务商范围证明阻止调用。实际视觉能力、参数范围与生效语义由配置的网关和上游决定；特别是独立部署的 27B 需支持上述 Qwen 参数形式，否则保存其调用错误并按实际服务适配。服务商限制导致的 HTTP 错误保存在单项结果，不静默修改设置。
 

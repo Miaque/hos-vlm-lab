@@ -27,8 +27,8 @@ class Controls(BaseModel):
 
     @model_validator(mode="after")
     def validate_budget(self):
-        if self.thinking != (self.thinking_budget is not None):
-            raise ValueError("开启思考须填写预算；关闭思考时预算须为空")
+        if not self.thinking and self.thinking_budget is not None:
+            raise ValueError("关闭思考时预算须为空")
         if self.thinking_budget is not None and self.thinking_budget >= self.max_tokens:
             raise ValueError("思考预算必须小于总生成上限")
         return self

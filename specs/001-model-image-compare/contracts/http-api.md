@@ -4,7 +4,7 @@
 
 ## 公共类型
 
-- controls = {thinking: boolean, thinking_budget: positive integer|null, max_tokens: positive integer, temperature: finite number}。关闭思考预算必须null；其他约束按模型槽位适配；temperature 为 0–2。
+- controls = {thinking: boolean, thinking_budget: positive integer|null, max_tokens: positive integer, temperature: finite number}。关闭思考预算必须null；开启时预算可为null，填写时必须小于max_tokens，仅发送给Qwen。所有模型支持思考开关映射；DeepSeek思考时不发送temperature，Kimi固定使用思考1.0／非思考0.6，其余使用输入值。temperature输入为0–2，实际参数保存在attempt中。
 - error = {code: string, message: string, details: [{model_key?: string, field?: string, message: string}]}。
 - request_id为客户端每次操作生成的UUID；同请求重传必须复用ID，修改内容必须换ID。
 - status值见[data-model.md](../data-model.md)。所有用量、费用的null显示未知；无模型结果显示未运行，不显示未检出。
