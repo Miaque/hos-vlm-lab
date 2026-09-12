@@ -350,6 +350,7 @@ function renderImages() {
   }
 }
 function renderResults() {
+  renderResultNavigation();
   const host = $("results");
   host.replaceChildren();
   $("result-empty").hidden = !!state.round;
@@ -437,6 +438,69 @@ function renderResults() {
   }
 }
 
+function selectResultImage(id) {
+  selectImage(id);
+  window.scrollTo({ top: $("results").getBoundingClientRect().top + window.scrollY - $("result-nav").offsetHeight - 12, behavior: "instant" });
+}
+function renderResultNavigation() {
+  const items = state.images;
+  const index = items.findIndex(item => item.id === state.selected);
+  $("result-nav").hidden = !state.round || index < 0;
+  if (!state.round || index < 0) return;
+  const item = items[index];
+  const name = item.name || item.original_name;
+  $("result-image-name").textContent = `第 ${index + 1} / ${items.length} 张 · ${name}`;
+  $("result-image-name").title = name;
+  $("result-prev").disabled = index === 0;
+  $("result-next").disabled = index === items.length - 1;
+  const host = $("result-thumbnails");
+  const identities = JSON.stringify(items.map(image => image.id));
+  if (host.dataset.identities !== identities) {
+    host.dataset.identities = identities;
+    host.replaceChildren();
+    for (const [i, image] of items.entries()) {
+      const tile = element("div", undefined, "result-thumbnail");
+      const button = element("button", undefined, "result-select");
+      button.type = "button";
+      button.dataset.imageId = image.id;
+      button.title = `第 ${i + 1} 张 · ${image.name || image.original_name}`;
+      button.setAttribute("aria-label", button.title);
+      const thumbnail = element("img");
+      thumbnail.src = image.prepared_url;
+      thumbnail.alt = "";
+      button.append(thumbnail, element("span", String(i + 1)));
+      button.onclick = () => selectResultImage(image.id);
+      const zoom = element("button", undefined, "thumbnail-zoom result-icon");
+      zoom.type = "button";
+      zoom.title = "放大原图";
+      zoom.setAttribute("aria-label", `放大第 ${i + 1} 张原图`);
+      zoom.innerHTML = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 4H4v5m11-5h5v5M4 15v5h5m11-5v5h-5" /></svg>';
+      zoom.onclick = () => openResultImage(image);
+      tile.append(button, zoom);
+      host.append(tile);
+    }
+  }
+  for (const button of host.querySelectorAll(".result-select")) {
+    const selected = button.dataset.imageId === state.selected;
+    button.setAttribute("aria-pressed", String(selected));
+    if (selected && (button.parentElement.offsetLeft < host.scrollLeft || button.parentElement.offsetLeft + button.offsetWidth > host.scrollLeft + host.clientWidth))
+      host.scrollLeft = button.parentElement.offsetLeft - (host.clientWidth - button.offsetWidth) / 2;
+  }
+}
+for (const [id, step] of [["result-prev", -1], ["result-next", 1]]) {
+  $(id).onclick = () => {
+    const index = state.images.findIndex(item => item.id === state.selected);
+    const item = state.images[index + step];
+    if (item) selectResultImage(item.id);
+  };
+}
+function openResultImage(item) {
+  $("image-dialog-title").textContent = item.name || item.original_name;
+  $("result-original").src = item.original_url;
+  $("result-original").alt = item.name || item.original_name;
+  $("image-dialog").showModal();
+}
+$("image-dialog-close").onclick = () => $("image-dialog").close();
 function packetTree(value, key = "正文", depth = 0) {
   if (key === "content" && typeof value === "string") {
     try {
@@ -451,8 +515,8 @@ function packetTree(value, key = "正文", depth = 0) {
   }
   if (value !== null && typeof value === "object") {
     const section = element("details", undefined, "packet-node");
-    section.open = depth < 5;
     const entries = Object.entries(value);
+    section.open = depth < 5 || entries.some(([, item]) => typeof item === "string" && /^data:image\/(png|jpe?g|webp|gif);base64,/i.test(item));
     const summary = element("summary");
     summary.append(element("span", key, "packet-key"), element("small", ` ${Array.isArray(value) ? "数组" : "对象"} · ${entries.length} 项`, "muted"));
     section.append(summary);
@@ -464,6 +528,13 @@ function packetTree(value, key = "正文", depth = 0) {
   const text = typeof value === "string" ? value : JSON.stringify(value);
   if (text.length > 120 || text.includes("\n")) row.classList.add("packet-long");
   if (typeof value === "string" && value.startsWith("data:image/")) {
+    if (/^data:image\/(png|jpe?g|webp|gif);base64,/i.test(value)) {
+      const preview = element("img", undefined, "packet-image-preview");
+      preview.alt = "报文中的图片";
+      preview.src = value;
+      preview.onerror = () => preview.replaceWith(element("p", "图片无法解码，可查看原文。", "muted"));
+      row.append(preview);
+    }
     const folded = element("details");
     folded.append(element("summary", `图片 Data URL · ${value.length.toLocaleString()} 字符 · 展开完整内容`));
     folded.addEventListener("toggle", () => {
@@ -508,7 +579,7 @@ async function openPacket(attempt, model) {
         $("packet-meta").append(headers);
       }
       $("packet-copy").disabled = raw == null;
-      $("packet-note").textContent = "敏感信息已脱敏；阅读视图展开字符串换行，图片内容默认折叠。原文与复制保留完整正文。";
+      $("packet-note").textContent = "敏感信息已脱敏；阅读视图显示图片预览，Base64 原文默认折叠。原文与复制保留完整正文。";
       if (format === "json" && !$("packet-images").checked)
         $("packet-note").textContent = "JSON 视图中的图片数据已用占位说明替代，可勾选显示完整图片数据。原文与复制始终保留完整脱敏正文。";
       if (raw == null) {
