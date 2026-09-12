@@ -45,10 +45,11 @@ def test_valid_empty_and_event():
 
 @pytest.mark.parametrize("fence", ["`", "```"])
 @pytest.mark.parametrize("label", ["", "json", "JSON"])
-def test_wrapped_events(fence, label):
+@pytest.mark.parametrize("prefix,suffix", [("", ""), ("逐项分析：未命中其他事件。\n", ""), ("", "\n以上为检测结果。"), ("分析\n", "\n说明")])
+def test_wrapped_events(fence, label, prefix, suffix):
     event = {"canonical_event_code": "person", "confidence": 0.9, "evidence": "可见人员"}
     body = json.dumps({"events": [event]}, ensure_ascii=False)
-    raw = f"  {fence}{label}\r\n{body}\r\n{fence}\n"
+    raw = f"{prefix}  {fence}{label}\r\n{body}\r\n{fence}\n{suffix}"
     assert parse_events(raw, {"person": "人员"}) == [event]
     assert parse_events(f"{fence}{label}\n{{\"events\":[]}}\n{fence}", {}) == []
     with pytest.raises(ValueError):
@@ -58,15 +59,33 @@ def test_wrapped_events(fence, label):
 
 
 @pytest.mark.parametrize("raw", [
-    '说明\n```json\n{"events":[]}\n```',
-    '```json\n{"events":[]}\n```\n说明',
+    '说明\n{"events":[]}',
+    '```json\n{"events":[]}\n```\n`json\n{"events":[]}\n`',
+    '```json\n{"events":[]}\n```\n```json\n未闭合',
     '```json\n{"events":[]}\n`',
-    '```json\n{"events":[],"events":[]}\n```',
-    '```json\n{"events":[],"extra":1}\n```',
+    '说明\n```json\n{"events":[],"events":[]}\n```',
+    '说明\n```json\n{"events":[],"extra":1}\n```',
+    '说明\n`json\n{"events":[{"canonical_event_code":"person","confidence":2,"evidence":"人"}]}\n`',
 ])
 def test_wrappers_do_not_relax_json_validation(raw):
     with pytest.raises(ValueError):
-        parse_events(raw, {})
+        parse_events(raw, {"person": "人员"})
+
+
+def test_kimi_analysis_with_single_backtick_result():
+    event = {
+        "canonical_event_code": "city.order.animal_detected",
+        "confidence": 0.7,
+        "evidence": "T0切片左侧广场地面上有一只白色犬只站立，头部、躯干及四肢结构可见，姿态自然。",
+    }
+    raw = (
+        "我需要根据提供的图片和切片，逐项判断是否有事件命中。\n\n"
+        "**city.order.animal_detected（检测到动物）**：命中，confidence约0.7\n"
+        "其他事件均无可见证据。\n\n`json\n"
+        + json.dumps({"events": [event]}, ensure_ascii=False)
+        + "\n`"
+    )
+    assert parse_events(raw, {"city.order.animal_detected": "检测到动物"}) == [event]
 
 
 @pytest.mark.parametrize(

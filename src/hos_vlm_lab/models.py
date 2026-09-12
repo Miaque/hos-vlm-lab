@@ -125,6 +125,12 @@ class Event(BaseModel):
 
 
 def parse_events(text: str, allowed: dict[str, str]) -> list[dict]:
+    # 仅提取唯一围栏；多个或未闭合的围栏不能猜测哪个是最终结果。
+    fences = list(re.finditer(r"^[ \t]*`+[^\r\n]*\r?$", text, re.MULTILINE))
+    if fences:
+        if len(fences) != 2:
+            raise ValueError("响应必须包含唯一且完整的 JSON 围栏")
+        text = text[fences[0].start():fences[1].end()]
     wrapped = re.fullmatch(r"\s*(```|`)(?:json)?[ \t]*\r?\n(.*?)\r?\n\1\s*", text, re.DOTALL | re.IGNORECASE)
     if wrapped:
         text = wrapped.group(2)
