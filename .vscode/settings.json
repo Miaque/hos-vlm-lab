@@ -33,7 +33,9 @@
     "backend/celerybeat-schedule.*": true,
     "**/.ruff_cache": true,
     ".uv-cache": true,
-    ".claude": true
+    ".claude": true,
+    ".playwright-mcp": true,
+    ".test-data": true
   },
   "python.languageServer": "Pylance",
   "python.pyrefly.displayTypeErrors": "force-off",

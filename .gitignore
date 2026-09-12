@@ -16,3 +16,4 @@ data/
 .env.*
 !.env.example
 .pytest_cache/
+.playwright-mcp/
