@@ -41,11 +41,11 @@
 
 ## 已确认边界
 
-同轮 1–20 张独立图片 × 1–5 个模型，统一图片字节与原样 JSON 提示词；可调整 thinking、thinking_budget、max_tokens、temperature。完整预检通过后才创建轮次；连接缺失或本地不兼容设置拒绝整轮，不静默省略或改写。
+同轮 1–20 张独立图片 × 1–5 个模型，统一图片字节与最终提示词；编辑器保留 JSON 规则，prompts.render_prompt 在创建轮次时编排为分节文本，冻结 rendered_prompt_text / prompt_renderer_version，与原始 prompt_text 一起保存。所有模型和重试使用同一冻结文本；旧轮次缺少新字段时沿用原始 JSON，不重新渲染。结果和历史对比可查看实际提示词。可调整 thinking、thinking_budget、max_tokens、temperature。完整预检通过后才创建轮次；连接缺失或本地不兼容设置拒绝整轮，不静默省略或改写参数。
 
 调用层使用 LangChain ChatOpenAI 对接 new-api / OpenAI 兼容入口，不再读取 *_PROFILE 或限制官方域名。原四模型共享连接，27B 独立且不回退。按模型槽位映射特殊参数：Qwen 使用 enable_thinking，开启时带 thinking_budget/max_completion_tokens；DeepSeek/Kimi 仅支持非思考数值参数。服务端能力和范围错误记录为调用失败，不静默改写参数。真实视觉和参数生效情况仍需验收，不能宣称五款真实模型已接通。
 
-输出仅为 events 中的 canonical_event_code / confidence / evidence，不画框、不添加 uncertain 状态或自动准确率排行。有效空列表是“未检出”，解析或调用失败单独保留。默认提示词来自 hos-analysis 历史测试种子，带来源信息；不依赖生产目录，不将其中的区域/佩戴义务假设默认为用户现场事实。
+输出仅为 events 中的 canonical_event_code / confidence / evidence，不画框、不添加 uncertain 状态或自动准确率排行。有效空列表是“未检出”，解析或调用失败单独保留。默认提示词为 hos-analysis 全局默认模板的 22 项事件、用户提供的事件目录响应与当前初筛指令的本地快照，带来源信息；运行时不依赖生产目录，不将其中的区域/佩戴义务假设默认为用户现场事实。
 
 每个模型内部串行，最多五路；只有一个活跃执行批次。停止与认领使用同一把锁，停止只阻止未开始项；重试追加 attempt 并拥有独立 cancel_requested，不能继承旧 stop_requested。重启将 queued/running 标记 interrupted，不自动调用。创建及重试通过 request_id 去重，事务提交前不发送模型请求。
 
@@ -56,6 +56,7 @@
 ## 开发约束
 
 - 使用中文沟通和编写项目说明；Git 提交信息使用中文，未经请求不提交或推送。
+- 生成 Git commit message 前，必须读取并遵循 [Git 提交规则](GIT_COMMIT_RULES.md)。
 - 先说明假设和验收标准；需求歧义影响实现时先澄清。
 - 使用满足当前需求的最小实现，不增加未请求的功能、依赖或扩展架构。
 - 修改前读取相关代码；只改任务必要文件，保留用户未提交工作，不顺手重构。

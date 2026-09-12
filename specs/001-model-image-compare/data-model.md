@@ -5,7 +5,7 @@
 | 实体 | 必填字段 | 可空字段与约束 |
 | --- | --- | --- |
 | images | id, original_name, original_sha256, prepared_sha256, original_path, prepared_path, width, height, preprocessing_version, created_at | 路径为data目录下生成的相对路径，不使用上传文件名拼路径 |
-| rounds | id, request_id, request_hash, prompt_text, event_snapshot, model_snapshot, controls, stop_requested, created_at | request_id唯一，同ID不同内容报冲突 |
+| rounds | id, request_id, request_hash, prompt_text, event_snapshot, model_snapshot, controls, stop_requested, created_at | request_id唯一，同ID不同内容报冲突；新轮次在 JSON snapshot 中增加 rendered_prompt_text / prompt_renderer_version，无需改表；旧轮次缺少时使用 prompt_text |
 | round_images | round_id, image_id, position | 外键有效，(round_id,image_id)唯一；保持上传顺序 |
 | attempts | id, round_id, image_id, model_key, attempt_no, request_parameters, status, created_at | retry_of、retry_request_id、started_at、finished_at、elapsed_ms、raw_response、parsed_events、error、usage、pricing、cost、currency可空 |
 

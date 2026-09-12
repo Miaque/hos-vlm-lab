@@ -7,6 +7,7 @@ from .config import build_parameters
 from .models import LabError, parse_prompt
 from .store import now
 from .gateway import calculate_cost, normalize_usage
+from .prompts import PROMPT_RENDERER_VERSION, render_prompt
 
 
 class Runner:
@@ -52,6 +53,8 @@ class Runner:
                 await self.store.image(identity)
             snapshot = payload | {
                 "request": payload,
+                "rendered_prompt_text": render_prompt(request.prompt_text),
+                "prompt_renderer_version": PROMPT_RENDERER_VERSION,
                 "event_snapshot": parse_prompt(request.prompt_text),
                 "model_snapshot": [m.identity() for m in selected],
                 "pricing_snapshot": {m.key: m.pricing for m in selected},
@@ -91,7 +94,7 @@ class Runner:
                     result = await self.gateway.call(
                         model,
                         image_bytes,
-                        snapshot["prompt_text"],
+                        snapshot.get("rendered_prompt_text", snapshot["prompt_text"]),
                         attempt["request_parameters"],
                         snapshot["event_snapshot"],
                     )

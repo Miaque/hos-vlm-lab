@@ -18,7 +18,7 @@
 | GET /api/images/{id}/{variant} | variant=original或prepared | 200图片；仅读取登记文件 |
 | POST /api/rounds | {request_id,image_ids,model_keys,prompt_text,controls} | 202 {round_id}，同ID同内容返回相同轮次 |
 | GET /api/rounds | limit默认20最大100，offset非负默认0 | 200 {items:[{id,created_at,status,counts}],total} |
-| GET /api/rounds/{id} | 无 | 200 {id,status,counts,images,model_snapshot,prompt_text,event_snapshot,controls,attempts:[摘要]} |
+| GET /api/rounds/{id} | 无 | 200 {id,status,counts,images,model_snapshot,prompt_text,rendered_prompt_text,prompt_renderer_version,event_snapshot,controls,attempts:[摘要]}；旧轮次无两个编排字段 |
 | GET /api/attempts/{id} | 无 | 200完整attempt明细，包括原始响应、参数、事件、error、usage、pricing、cost、currency |
 | POST /api/rounds/{id}/stop | 无 | 200 {round_id,status,counts}，停止当前活动执行批次，无活动批次时不改变历史；重复停止安全 |
 | POST /api/attempts/{id}/retry | {request_id} | 202 {round_id,attempt_id}，同ID同目标返回相同attempt |
@@ -27,7 +27,7 @@ attempt摘要包含id、image_id、model_key、attempt_no、retry_of、status、
 
 ## 输入与错误
 
-创建轮次整体校验：image_ids必须包含1–20个图片ID，ID存在且不重复、模型1–5款且不重复、所有配置兼容；完整JSON提示词根对象包含非空events，其code/name非空且code唯一，输入事件判定字段保留。完整文本原样发送，不重新序列化为另一份提示词。
+创建轮次整体校验：image_ids必须包含1–20个图片ID，ID存在且不重复、模型1–5款且不重复、所有配置兼容；完整JSON提示词根对象包含非空events，其code/name非空且code唯一，输入事件判定字段保留。创建时生成分节文本 rendered_prompt_text 并与原始 prompt_text、prompt_renderer_version 一起提交快照。全部模型发送同一冻结文本，重试不重新编排；旧轮次缺少该字段时仍发送 prompt_text。request_id 幂等比较以用户输入为准，不受编排版本变化影响。
 
 轮次数量限制独立于单次上传限制：分批上传后合并21个有效ID创建轮次也必须返回422，details.field为image_ids，不创建轮次或尝试、不发起模型调用；1个和20个有效ID均允许进入后续校验。
 

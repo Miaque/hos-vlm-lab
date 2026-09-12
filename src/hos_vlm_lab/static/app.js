@@ -129,6 +129,13 @@ function renderResults() {
   $("result-empty").hidden = !!state.round;
   if (!state.round) return;
   const round = state.round;
+  const promptDetails = element("details");
+  promptDetails.style.gridColumn = "1 / -1";
+  promptDetails.append(
+    element("summary", "本轮实际发送的提示词"),
+    element("pre", round.rendered_prompt_text ?? round.prompt_text),
+  );
+  host.append(promptDetails);
   $("progress").textContent = Object.entries(round.counts)
     .map(([k, v]) => `${labels[k] || k} ${v}`)
     .join(" · ");
@@ -164,7 +171,8 @@ function renderResults() {
     }
     if (attempt.error)
       card.append(element("p", attempt.error.message, "error"));
-    card.append(
+    const footer = element("div", undefined, "result-footer");
+    footer.append(
       element(
         "p",
         `耗时 ${attempt.elapsed_ms == null ? "未知" : attempt.elapsed_ms + " ms"} · 费用 ${attempt.cost == null ? "未知" : attempt.cost + " " + attempt.currency}`,
@@ -182,8 +190,9 @@ function renderResults() {
           pre.textContent = JSON.stringify(data, null, 2);
         });
     });
-    card.append(details);
-    addAttemptActions(card, attempt);
+    footer.append(details);
+    addAttemptActions(footer, attempt);
+    card.append(footer);
     host.append(card);
   }
 }
@@ -415,7 +424,7 @@ $("compare").onclick = () =>
         element("summary", label + " · 提示词与参数快照"),
         element(
           "pre",
-          round.prompt_text + "\n" + JSON.stringify(round.controls, null, 2),
+          (round.rendered_prompt_text ?? round.prompt_text) + "\n" + JSON.stringify(round.controls, null, 2),
         ),
       );
       snapshots.append(detail);

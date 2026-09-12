@@ -84,10 +84,11 @@
             总生成上限包含思考与回答。不兼容的设置会拒绝整轮，不会静默忽略。
           </p>
           <div class="section-heading">
-            <label for="prompt">完整 JSON 提示词</label
+            <label for="prompt">检测规则（JSON）</label
             ><button id="reset" class="subtle" type="button">恢复默认</button>
           </div>
           <textarea id="prompt" spellcheck="false" rows="12"></textarea>
+          <p class="muted">创建轮次时转换为分节文本发送；可在结果中查看该轮实际提示词。</p>
           <div class="actions">
             <button id="run" class="primary">开始对比</button
             ><button id="stop" disabled>停止待开始项</button

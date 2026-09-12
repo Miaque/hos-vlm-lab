@@ -29,7 +29,9 @@ async def test_cartesian_inputs_and_snapshot(config):
     assert await runner.create(request) == rid
     await runner.task
     assert len(gateway.calls) == 4
-    assert all(call[2] == PROMPT for call in gateway.calls)
+    snapshot = await store.round(rid)
+    assert snapshot["prompt_text"] == PROMPT
+    assert all(call[2] == snapshot["rendered_prompt_text"] for call in gateway.calls)
     assert (await store.round(rid))["counts"] == {"succeeded": 4}
     await runner.close()
     await store.close()
