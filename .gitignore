@@ -17,3 +17,4 @@ data/
 !.env.example
 .pytest_cache/
 .playwright-mcp/
+.idea/
