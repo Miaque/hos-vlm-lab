@@ -5,7 +5,7 @@ import json
 from .models import _json
 
 
-PROMPT_RENDERER_VERSION = "2026-09-12.v1"
+PROMPT_RENDERER_VERSION = "2026-10-30.v1"
 
 
 def render_prompt(text: str) -> str:
@@ -44,7 +44,7 @@ def render_prompt(text: str) -> str:
         "# 输出\n"
         "只输出一个 JSON 对象，顶层只有 events 数组，不要 Markdown、坐标或额外文字。\n"
         "每个命中项仅含 canonical_event_code、confidence、evidence：编码必须来自上述目录，且每个编码最多一次；"
-        "confidence 为 0 到 1 的数字；evidence 为非空中文可见证据，描述位置、目标特征或行为，最多 200 字。\n"
+        "confidence 为 0 到 1 的数字；识别依据（对应 evidence 字段）为非空中文，描述位置、目标特征或行为，最多 200 字。\n"
         '没有事件满足条件时返回 {"events":[]}。\n'
         "提交前核对编码、字段和可见证据是否一致，只提交最终 JSON。"
     )
@@ -61,7 +61,7 @@ def render_view_prompt(prompt: str, views: list[dict]) -> str:
         "full 是整图；T0、T1、T2 是由左至右、相邻重叠约 25% 的全高切片，坐标基于处理后图片。\n"
         "切片直接检测，不等待整图初筛；逐片独立判断，不跨片拼凑证据。"
         "证据被切片边界截断、关键关系延伸到片外或需要猜测片外内容时不命中。\n"
-        "同一事件多片命中时只返回置信度最高的一项，evidence 注明视图编号；未命中则不返回。"
+        "同一事件多片命中时只返回置信度最高的一项，识别依据注明视图编号；未命中则不返回。"
         "仍严格使用上述 events 输出结构。\n"
         + json.dumps(views, ensure_ascii=False)
     )
